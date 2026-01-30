@@ -1,20 +1,8 @@
-from pydantic import EmailStr
-from app.schemas import BaseSchema
+from fastapi_rest_toolkit.utils import sqlalchemy_model_to_pydantic
+
+from app.models.user import User
 
 
-class UserRead(BaseSchema):
-    id: int
-    email: EmailStr
-    name: str
-    is_active: bool
-
-class UserCreate(BaseSchema):
-    email: EmailStr
-    name: str
-    is_active: bool = False
-
-
-class UserUpdate(BaseSchema):
-    email: EmailStr | None = None
-    name: str | None = None
-    is_active: bool | None = None
+UserRead = sqlalchemy_model_to_pydantic(User, name="UserRead")
+UserCreate = sqlalchemy_model_to_pydantic(User, name="UserCreate")
+UserUpdate = sqlalchemy_model_to_pydantic(User, name="UserUpdate")
