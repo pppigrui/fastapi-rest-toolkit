@@ -1,0 +1,6 @@
+exclude *.db
+prune app
+prune __pycache__
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *.pyd

@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling>=1.24.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fastapi-rest-toolkit"
+version = "0.0.2"  # 记得比你已发布的版本号大（不能覆盖）
+description = "类DRF风格的FastAPI工具包"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+  { name = "xiaorui", email = "pppigrui@gmail.com" }
+]
+keywords = ["fastapi", "rest", "api", "toolkit", "drf"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Framework :: FastAPI",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+  "fastapi>=0.128.0",
+  "uvicorn[standard]>=0.40.0",
+  "sqlalchemy>=2.0.46",
+  "aiosqlite>=0.22.0",
+  "python-jose[cryptography]>=3.5.0",
+  "pydantic>=2.12.0",
+  "sqlalchemy-crud-plus>=1.13.0",
+  "redis>=7.1.0",
+]
+
+[project.optional-dependencies]
+redis = ["redis>=5.0.0"]
+all = [
+  "fastapi-rest-toolkit[redis]",
+]
+
+[project.urls]
+Homepage = "https://github.com/pppigrui/fastapi-rest-toolkit"
+Documentation = "https://github.com/pppigrui/fastapi-rest-toolkit#readme"
+Repository = "https://github.com/pppigrui/fastapi-rest-toolkit"
+"Bug Tracker" = "https://github.com/pppigrui/fastapi-rest-toolkit/issues"
+
+
+[tool.hatch.build.targets.wheel]
+# 只把库代码打进 wheel（用户 pip install 主要装的就是 wheel）
+packages = ["src/fastapi_rest_toolkit"]
+
+[tool.hatch.build.targets.sdist]
+
+include = [
+  "/src/fastapi_rest_toolkit/**",
+  "/pyproject.toml",
+  "/README.md",
+  "/LICENSE",
+]
