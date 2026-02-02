@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fastapi-rest-toolkit"
-version = "0.0.3"  # 记得比你已发布的版本号大（不能覆盖）
+version = "0.0.4"  # 记得比你已发布的版本号大（不能覆盖）
 description = "类DRF风格的FastAPI工具包"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -12,7 +12,7 @@ license = { text = "MIT" }
 authors = [
   { name = "xiaorui", email = "pppigrui@gmail.com" }
 ]
-keywords = ["fastapi", "rest", "api", "toolkit", "drf"]
+keywords = ["fastapi", "rest", "api", "toolkit", "drf", "fastapi-rest-framework"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",

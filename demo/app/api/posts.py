@@ -2,10 +2,10 @@ from sqlalchemy_crud_plus import CRUDPlus
 
 from app.db.redis import redis_client
 
-from fastapi_rest_toolkit.viewset import ViewSet
-from fastapi_rest_toolkit.permissions import IsAuthenticated, AllowAny
-from fastapi_rest_toolkit.throttle import AsyncRedisSimpleRateThrottle
-from fastapi_rest_toolkit.service import CRUDService
+from src.fastapi_rest_toolkit.viewset import ViewSet
+from src.fastapi_rest_toolkit.permissions import IsAuthenticated, AllowAny
+from src.fastapi_rest_toolkit.throttle import AsyncRedisSimpleRateThrottle
+from src.fastapi_rest_toolkit.service import CRUDService
 
 from app.models.post import Post
 from app.schemas.post import PostRead, PostCreate, PostUpdate

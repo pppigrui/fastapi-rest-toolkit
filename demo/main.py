@@ -9,14 +9,12 @@ from app.db.session import engine, get_session
 from app.models.base import Base
 from app.models.user import User
 
-from app.auth.deps import get_current_user
 from app.auth.jwt import encode_jwt
 
-from fastapi_rest_toolkit.router import DefaultRouter
+from src.fastapi_rest_toolkit.router import DefaultRouter
 from app.api.users import UserViewSet
 from app.exceptions import register_exception_handlers
 from app.api.posts import PostViewSet
-
 
 
 @asynccontextmanager
@@ -55,18 +53,12 @@ router = DefaultRouter()
 router.register(
     "users",
     UserViewSet,
-    get_session=get_session,
-    get_user=get_current_user,
-    tags=["users"],
-    pk_type=int,
+    get_session=get_session
 )
 router.register(
     "posts",
     PostViewSet,
-    get_session=get_session,
-    get_user=get_current_user,
-    tags=["posts"],
-    pk_type=int,
+    get_session=get_session
 )
 app.include_router(router.router, prefix="/api")
 

@@ -11,7 +11,7 @@ class FRFRequest:
     query_params: Mapping[str, str] | None = None
 
     @classmethod
-    async def from_fastapi(cls, request: Request, user: Any = None):
+    async def from_fastapi(cls, request: Request):
         data = None
         if request.method in ("POST", "PUT", "PATCH"):
             try:
@@ -21,7 +21,6 @@ class FRFRequest:
 
         return cls(
             raw=request,
-            user=user,
             data=data,
             query_params=dict(request.query_params),
         )

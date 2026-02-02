@@ -14,22 +14,19 @@ class DefaultRouter:
         viewset_cls: ViewSet,
         *,
         get_session,
-        get_user,
         tags=None,
         pk_type=int,
     ):
         vs: ViewSet = viewset_cls()
 
-        async def build_request(req: Request, user=Depends(get_user)):
-            return await FRFRequest.from_fastapi(req, user=user)
+        async def build_request(req: Request) -> FRFRequest:
+            return await FRFRequest.from_fastapi(req)
 
         async def list_ep(request=Depends(build_request), session=Depends(get_session)):
             async with session.begin():
                 return await vs.list(request, session)
 
-        async def create_ep(
-            request=Depends(build_request), session=Depends(get_session)
-        ):
+        async def create_ep(request=Depends(build_request), session=Depends(get_session)):
             async with session.begin():
                 return await vs.create(request, session)
 
@@ -57,19 +54,28 @@ class DefaultRouter:
             async with session.begin():
                 return await vs.destroy(request, session, pk)
 
-        self.router.add_api_route(f"/{prefix}", list_ep, methods=["GET"], tags=tags)
-        self.router.add_api_route(f"/{prefix}", create_ep, methods=["POST"], tags=tags)
-        self.router.add_api_route(
-            f"/{prefix}" + "/{pk}", retrieve_ep, methods=["GET"], tags=tags
-        )
-        self.router.add_api_route(
-            f"/{prefix}" + "/{pk}", update_ep, methods=["PUT"], tags=tags
-        )
-        self.router.add_api_route(
-            f"/{prefix}" + "/{pk}", patch_ep, methods=["PATCH"], tags=tags
-        )
-        self.router.add_api_route(
-            f"/{prefix}" + "/{pk}", delete_ep, methods=["DELETE"], tags=tags
-        )
+        # 一个字典同时管理：endpoint、HTTP 方法、是否 detail
+        routes = {
+            "list": (list_ep, "GET", False),
+            "create": (create_ep, "POST", False),
+            "retrieve": (retrieve_ep, "GET", True),
+            "update": (update_ep, "PUT", True),
+            "partial_update": (patch_ep, "PATCH", True),
+            "destroy": (delete_ep, "DELETE", True),
+        }
+
+        for action in vs.allowed_methods:
+            if action not in routes:
+                continue
+
+            func, http_method, detail = routes[action]
+            path = f"/{prefix}/{{pk}}" if detail else f"/{prefix}"
+
+            self.router.add_api_route(
+                path,
+                func,
+                methods=[http_method],
+                tags=tags,
+            )
 
         return self

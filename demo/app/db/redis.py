@@ -39,7 +39,6 @@ class RedisClient:
                 # TCP Keepalive 深度优化：防止防火墙切断空闲连接
                 socket_keepalive=True,
                 socket_keepalive_options={
-                    socket.TCP_KEEPALIVE: 60,  # 60秒空闲后开始发包
                     socket.TCP_KEEPCNT: 3,  # 连续探测3次失败则断开
                     socket.TCP_KEEPINTVL: 10,  # 探测间隔10秒
                 },

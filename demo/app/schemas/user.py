@@ -1,4 +1,4 @@
-from fastapi_rest_toolkit.utils import sqlalchemy_model_to_pydantic
+from src.fastapi_rest_toolkit.utils import sqlalchemy_model_to_pydantic
 
 from app.models.user import User
 

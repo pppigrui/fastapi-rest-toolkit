@@ -4,12 +4,27 @@
 
 ## 特性
 
-- **ViewSet**: 类似 DRF 的 ViewSet，支持 CRUD 操作
+- **ViewSet**: 类似 DRF 的 ViewSet，支持完整的 CRUD 操作
 - **Router**: 自动路由注册，简化路由配置
+- **认证系统**: 灵活的认证机制（Bearer Token 等）
 - **权限系统**: 灵活的权限控制（AllowAny、IsAuthenticated、IsAdmin）
 - **过滤器**: 支持搜索、排序、CRUD Plus 过滤
 - **节流**: 内置限流机制，支持 Redis 存储
+- **分页**: 内置 LimitOffset 分页
+- **关联加载**: 支持 SQLAlchemy 关联数据预加载
 - **Schema 工具**: 从 SQLAlchemy 模型自动生成 Pydantic Schema
+
+## 安装
+
+```bash
+pip install fastapi-rest-toolkit
+```
+
+或安装包含 Redis 依赖的完整版本：
+
+```bash
+pip install fastapi-rest-toolkit[all]
+```
 
 ## 安装
 
@@ -27,9 +42,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import String, DateTime, func
 
-from fastapi_rest_toolkit import DefaultRouter, ViewSet, CRUDService
-from fastapi_rest_toolkit.permissions import IsAuthenticated, AllowAny
-from fastapi_rest_toolkit.throttle import AsyncRedisSimpleRateThrottle
+from fastapi_rest_toolkit import (
+    DefaultRouter,
+    ViewSet,
+    CRUDService,
+    AllowAny,
+    IsAuthenticated,
+    AsyncRedisSimpleRateThrottle,
+)
 from sqlalchemy_crud_plus import CRUDPlus
 from app.db.redis import redis_client
 
@@ -95,12 +115,41 @@ router.register(
     "users",
     UserViewSet,
     get_session=get_session,
-    get_user=get_current_user,  # 可选的认证依赖
     tags=["users"],
-    pk_type=int,
 )
 
 app.include_router(router.router, prefix="/api")
+```
+
+### 认证系统
+
+支持自定义认证类，继承 `BaseAuthentication` 实现认证逻辑：
+
+```python
+from fastapi import HTTPException, status
+from fastapi_rest_toolkit.authentication import BearerAuthentication
+from fastapi_rest_toolkit.request import FRFRequest
+from fastapi_rest_toolkit.contextvar import session_var
+
+class UserAuthentication(BearerAuthentication):
+    async def authenticate(self, request: FRFRequest) -> tuple[Any, Any]:
+        session = session_var.get()
+        token = self.get_token(request)
+
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication"
+            )
+
+        # 验证 token 并获取用户
+        user = await self.verify_token(token, session)
+        return user, token
+
+# 在 ViewSet 中使用
+class UserViewSet(ViewSet):
+    authentication_classes = (UserAuthentication,)
+    permission_classes = (IsAuthenticated,)
 ```
 
 ### 自动生成 Schema
@@ -129,13 +178,45 @@ class UserViewSet(ViewSet):
 ### 权限控制
 
 ```python
-from fastapi_rest_toolkit.permissions import AllowAny, IsAuthenticated, IsAdmin
+from fastapi_rest_toolkit import AllowAny, IsAuthenticated, IsAdmin
 
 class ProtectedViewSet(ViewSet):
     permission_classes = (IsAuthenticated,)  # 需要登录
 
 class AdminViewSet(ViewSet):
     permission_classes = (IsAdmin,)  # 需要管理员权限
+```
+
+**自定义权限类：**
+
+```python
+from fastapi_rest_toolkit.permissions import BasePermission
+from fastapi_rest_toolkit.request import FRFRequest
+
+class IsOwner(BasePermission):
+    async def has_permission(self, request: FRFRequest, viewset) -> bool:
+        return request.user and request.user.id == int(request.path_params["id"])
+```
+
+### 分页
+
+内置 `LimitOffsetPagination` 分页支持：
+
+```python
+from fastapi_rest_toolkit import ViewSet, LimitOffsetPagination
+
+class CustomPagination(LimitOffsetPagination):
+    default_limit = 10
+    max_limit = 50
+
+class UserViewSet(ViewSet):
+    pagination = CustomPagination()
+```
+
+**API 使用示例：**
+
+```bash
+GET /api/users?limit=10&offset=0
 ```
 
 ### 搜索和排序
@@ -175,6 +256,12 @@ class UserViewSet(ViewSet):
     ),)
 ```
 
+**可用节流类：**
+
+- `SimpleRateThrottle` - 简单限流（内存存储）
+- `AnonRateThrottle` - 匿名用户限流
+- `AsyncRedisSimpleRateThrottle` - 基于 Redis 的异步限流
+
 ### 异常处理
 
 ```python
@@ -204,6 +291,24 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
 app.add_exception_handler(IntegrityError, integrity_error_handler)
 ```
 
+### 自定义方法行为
+
+可以通过覆盖方法来自定义行为：
+
+```python
+class UserViewSet(ViewSet):
+    async def create(self, request: FRFRequest):
+        # 自定义创建逻辑
+        data = await request.json()
+        # ... 自定义处理
+        return await super().create(request)
+
+    async def destroy(self, request: FRFRequest, id: int):
+        # 自定义删除逻辑
+        # ... 检查权限等
+        return await super().destroy(request, id)
+```
+
 ## 组件说明
 
 ### ViewSet
@@ -217,6 +322,54 @@ app.add_exception_handler(IntegrityError, integrity_error_handler)
 | `create()` | `POST /api/users` | 创建对象 |
 | `update()` | `PUT/PATCH /api/users/{id}` | 更新对象 |
 | `destroy()` | `DELETE /api/users/{id}` | 删除对象 |
+
+**ViewSet 配置选项：**
+
+```python
+class ViewSet:
+    # Schema 配置
+    read_schema: Type[BaseModel]      # 读取数据的 Schema
+    create_schema: Type[BaseModel]    # 创建数据的 Schema
+    update_schema: Type[BaseModel]    # 更新数据的 Schema
+
+    # 认证和权限
+    authentication_classes: Sequence[Type[BaseAuthentication]]  # 认证类
+    permission_classes: Sequence[Type[BasePermission]]          # 权限类
+
+    # 过滤和排序
+    search_fields: Sequence[str]       # 可搜索字段
+    ordering_fields: Sequence[str]     # 可排序字段
+    filter_backends: Sequence          # 过滤器后端
+
+    # 分页和节流
+    pagination: LimitOffsetPagination  # 分页配置
+    throttle_classes: Sequence[Type[BaseThrottle]]  # 节流类
+    throttle_scope: str                # 节流作用域
+
+    # 关联加载
+    load_strategies: Sequence[str]     # 预加载的关联字段
+    join_conditions: Any               # join 条件
+
+    # 允许的 HTTP 方法
+    allowed_methods: Sequence[str]     # 默认为所有 CRUD 方法
+```
+
+### 认证类
+
+- `BaseAuthentication` - 认证基类
+- `BearerAuthentication` - Bearer Token 认证基类
+
+**自定义认证：**
+
+```python
+from fastapi_rest_toolkit.authentication import BaseAuthentication
+from fastapi_rest_toolkit.request import FRFRequest
+
+class CustomAuth(BaseAuthentication):
+    async def authenticate(self, request: FRFRequest) -> tuple[Any, Any]:
+        # 返回 (user, auth) 或 (None, None)
+        pass
+```
 
 ### 权限类
 
@@ -237,9 +390,43 @@ app.add_exception_handler(IntegrityError, integrity_error_handler)
 - `AnonRateThrottle` - 匿名用户限流
 - `AsyncRedisSimpleRateThrottle` - 基于 Redis 的异步限流
 
+### Router
+
+`DefaultRouter` 自动为 ViewSet 注册路由：
+
+```python
+router = DefaultRouter()
+router.register(
+    prefix="users",           # URL 前缀
+    viewset=UserViewSet,      # ViewSet 类
+    get_session=get_session,  # 数据库会话获取函数
+    tags=["users"],           # OpenAPI 标签
+)
+app.include_router(router.router, prefix="/api")
+```
+
 ### 工具函数
 
 - `sqlalchemy_model_to_pydantic()` - 从 SQLAlchemy 模型生成 Pydantic Schema
+
+## 完整 Demo
+
+查看 [demo](./demo/) 目录获取完整的使用示例，包括：
+
+- 数据库模型定义
+- JWT 认证实现
+- Redis 节流配置
+- 异常处理
+- 多种 ViewSet 实现
+
+运行示例：
+
+```bash
+cd demo
+uvicorn main:app --reload
+```
+
+API 文档访问：http://127.0.0.1:8000/docs
 
 ## License
 
