@@ -11,7 +11,7 @@ from src.fastapi_rest_toolkit.service import CRUDService
 from app.models.user import User
 from app.schemas.user import UserRead, UserCreate, UserUpdate
 from app.deps.auth import UserAuthentication
-
+from src.fastapi_rest_toolkit.decorators import action
 
 class UserViewSet(ViewSet):
     read_schema = UserRead
@@ -34,4 +34,6 @@ class UserViewSet(ViewSet):
         user_crud = CRUDPlus(User)
         self.service = CRUDService(crud=user_crud, model=User)
 
-
+    @action(methods=["get"], detail=False)
+    async def hello(self, request, session):
+        return {"message": "Hello, World!"}
