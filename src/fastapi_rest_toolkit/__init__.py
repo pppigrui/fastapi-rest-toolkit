@@ -7,6 +7,7 @@ from .permissions import (
     IsAuthenticated,
     IsAdmin,
 )
+from .decorators import action
 
 from .filters import (
     CRUDPlusFilterBackend,
@@ -29,6 +30,7 @@ __all__ = [
     "AllowAny",
     "IsAuthenticated",
     "IsAdmin",
+    "action",
     "CRUDPlusFilterBackend",
     "SearchFilterBackend",
     "OrderingFilterBackend",

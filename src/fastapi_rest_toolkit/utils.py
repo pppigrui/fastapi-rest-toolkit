@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Optional, Type
+from inspect import getmembers
 
 from pydantic import BaseModel, create_model
 from sqlalchemy import Column
@@ -83,3 +84,22 @@ def sqlalchemy_model_to_pydantic(
         P = create_model(model_name, __base__=BaseModel, **fields)
 
     return P
+
+
+def get_actions(viewset) -> dict[str, dict]:
+    """
+    获取 ViewSet 中所有自定义 action 的元数据
+
+    Returns:
+        dict: {action_name: {"methods": tuple, "detail": bool, "url_path": str, "func": callable}}
+    """
+    actions = {}
+    for name, method in getmembers(viewset):
+        if getattr(method, "is_action", False):
+            actions[name] = {
+                "methods": method.action_methods,
+                "detail": method.action_detail,
+                "url_path": method.action_url_path,
+                "func": method,
+            }
+    return actions

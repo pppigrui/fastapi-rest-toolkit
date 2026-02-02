@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Request
 
 from .viewset import ViewSet
 from .request import FRFRequest
+from .utils import get_actions
 
 
 class DefaultRouter:
@@ -69,12 +70,51 @@ class DefaultRouter:
                 continue
 
             func, http_method, detail = routes[action]
-            path = f"/{prefix}/{{pk}}" if detail else f"/{prefix}"
+            path = f"/{prefix}/{{pk:{pk_type}}}" if detail else f"/{prefix}"
 
             self.router.add_api_route(
                 path,
                 func,
                 methods=[http_method],
+                tags=tags,
+            )
+
+        def make_action_endpoint(action_func, detail: bool):
+            if detail:
+                async def endpoint(
+                    pk: pk_type,
+                    request=Depends(build_request),
+                    session=Depends(get_session),
+                ):
+                    async with session.begin():
+                        return await action_func(request, session, pk)
+                return endpoint
+            else:
+                async def endpoint(
+                    request=Depends(build_request),
+                    session=Depends(get_session),
+                ):
+                    async with session.begin():
+                        return await action_func(request, session)
+                return endpoint
+
+        # 注册自定义 actions
+        custom_actions = get_actions(vs)
+        for action_name, action_config in custom_actions.items():
+            action_func = action_config["func"]
+            action_methods = action_config["methods"]
+            detail = action_config["detail"]
+            url_path = action_config["url_path"]
+
+            if detail:
+                path = f"/{prefix}/{{pk:{pk_type}}}/{url_path}"
+            else:
+                path = f"/{prefix}/{url_path}"
+            action_endpoint = make_action_endpoint(action_func, detail)
+            self.router.add_api_route(
+                path,
+                action_endpoint,
+                methods=list(action_methods),
                 tags=tags,
             )
 
