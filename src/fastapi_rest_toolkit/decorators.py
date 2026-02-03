@@ -9,12 +9,12 @@ def action(
     url_path: Optional[str] = None,
 ):
     """
-    标记 ViewSet 方法为自定义 action 的装饰器，类似于 DRF 的 @action
+    Decorator to mark a ViewSet method as a custom action, similar to DRF's @action
 
     Args:
-        methods: 允许的 HTTP 方法列表，默认为 ("get",)
-        detail: 是否为 detail action，True 表示需要 pk，False 表示 list-level action
-        url_path: 自定义 URL 路径，默认使用方法名
+        methods: List of allowed HTTP methods, defaults to ("get",)
+        detail: Whether it's a detail action, True means pk is required, False means list-level action
+        url_path: Custom URL path, defaults to the method name
 
     Usage:
         class MyViewSet(ViewSet):
@@ -29,7 +29,7 @@ def action(
                 pass
     """
     def decorator(func):
-        # 将 action 元数据存储到函数对象上
+        # Store action metadata on the function object
         func.is_action = True
         func.action_methods = tuple(methods)
         func.action_detail = detail
@@ -39,7 +39,7 @@ def action(
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)
 
-        # 保留 action 元数据到 wrapper
+        # Preserve action metadata on wrapper
         wrapper.is_action = True
         wrapper.action_methods = func.action_methods
         wrapper.action_detail = func.action_detail

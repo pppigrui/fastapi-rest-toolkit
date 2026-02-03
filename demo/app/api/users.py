@@ -17,9 +17,9 @@ class UserViewSet(ViewSet):
     read_schema = UserRead
     create_schema = UserCreate
     update_schema = UserUpdate
-    authentication_classes = (UserAuthentication,)  # 自定义认证
+    authentication_classes = (UserAuthentication,)  # Custom authentication
 
-    # Demo: 默认需要登录。你想开放注册可改成 AllowAny
+    # Demo: Requires login by default. You can change to AllowAny to open registration
     permission_classes = (
         AllowAny,
         IsAuthenticated,

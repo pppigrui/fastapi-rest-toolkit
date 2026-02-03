@@ -23,7 +23,7 @@ async def lifespan(_app: FastAPI):  # noqa: ARG001
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
-    # Shutdown (如果需要的话)
+    # Shutdown (if needed)
 
 
 app = FastAPI(
@@ -31,7 +31,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# 注册异常处理器
+# Register exception handlers
 register_exception_handlers(app)
 
 

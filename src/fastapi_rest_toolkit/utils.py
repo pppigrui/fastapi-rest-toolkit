@@ -13,11 +13,11 @@ def _optional(tp: Any) -> Any:
 
 
 def _column_py_type(col: Column) -> Any:
-    # 大多数类型都有 python_type
+    # Most types have python_type
     try:
         return col.type.python_type
     except Exception:
-        # 兜底：你也可以在这里扩展更多类型映射
+        # Fallback: you can also extend more type mappings here
         return Any
 
 
@@ -31,9 +31,9 @@ def sqlalchemy_model_to_pydantic(
 ) -> Type[BaseModel]:
     """
     mode:
-      - read:   包含所有列（除 exclude），nullable->Optional；带 from_attributes
-      - create: 默认排除自增主键、server_default字段（比如 created_at），nullable->Optional
-      - update: 全部字段 Optional（用于 PATCH）
+      - read:   Includes all columns (except exclude), nullable->Optional; with from_attributes
+      - create: Excludes auto-increment primary keys and server_default fields (e.g., created_at) by default, nullable->Optional
+      - update: All fields Optional (for PATCH)
     """
     exclude = exclude or set()
     overrides = overrides or {}
@@ -45,7 +45,7 @@ def sqlalchemy_model_to_pydantic(
         if key in exclude:
             continue
 
-        # create 模式：通常不需要 id / server_default 字段
+        # create mode: typically don't need id / server_default fields
         if mode == "create":
             if col.primary_key and getattr(col, "autoincrement", False):
                 continue
@@ -54,17 +54,17 @@ def sqlalchemy_model_to_pydantic(
 
         py_type = overrides.get(key) or _column_py_type(col)
 
-        # 可空字段 -> Optional
+        # nullable fields -> Optional
         if col.nullable:
             py_type = _optional(py_type)
 
         default = ...
-        # update 模式：全部 Optional 且默认 None
+        # update mode: all Optional with default None
         if mode == "update":
             py_type = _optional(py_type)
             default = None
         else:
-            # 有 Python-side default 的话可以带上（server_default 不在这里处理）
+            # If there's a Python-side default, include it (server_default not handled here)
             if col.default is not None and getattr(col.default, "is_scalar", False):
                 default = col.default.arg
 
@@ -72,7 +72,7 @@ def sqlalchemy_model_to_pydantic(
 
     model_name = name or f"{sa_model.__name__}{mode.capitalize()}Schema"
 
-    # read 模式启用 ORM 解析
+    # Enable ORM parsing for read mode
     if mode == "read":
         P = create_model(
             model_name,
@@ -88,7 +88,7 @@ def sqlalchemy_model_to_pydantic(
 
 def get_actions(viewset) -> dict[str, dict]:
     """
-    获取 ViewSet 中所有自定义 action 的元数据
+    Get metadata of all custom actions in ViewSet
 
     Returns:
         dict: {action_name: {"methods": tuple, "detail": bool, "url_path": str, "func": callable}}

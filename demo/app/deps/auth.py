@@ -22,7 +22,7 @@ class UserAuthentication(BearerAuthentication):
             )
 
         payload = decode_jwt(token)
-        sub = payload.get("sub")  # 放入的user_id
+        sub = payload.get("sub")  # user_id stored in token
         if sub is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload"

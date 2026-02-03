@@ -11,9 +11,9 @@ from redis.exceptions import RedisError
 
 class RedisClient:
     """
-    Redis 客户端包装类
-    - 支持根据不同 redis_url 创建多个实例
-    - 每个实例内部维护自己的连接池和 Redis 客户端
+    Redis client wrapper class
+    - Supports creating multiple instances based on different redis_url
+    - Each instance maintains its own connection pool and Redis client internally
     """
 
     def __init__(self, redis_url: str | None = None) -> None:
@@ -34,19 +34,19 @@ class RedisClient:
                 self._redis_url,
                 decode_responses=True,
                 # 超时配置
-                socket_timeout=5,  # 建议缩短到5s，快速失败比慢速等待好
+                socket_timeout=5,  # Recommended to reduce to 5s, fast failure is better than slow waiting
                 socket_connect_timeout=5,
-                # TCP Keepalive 深度优化：防止防火墙切断空闲连接
+                # TCP Keepalive deep optimization: prevent firewall from cutting idle connections
                 socket_keepalive=True,
                 socket_keepalive_options={
-                    socket.TCP_KEEPCNT: 3,  # 连续探测3次失败则断开
-                    socket.TCP_KEEPINTVL: 10,  # 探测间隔10秒
+                    socket.TCP_KEEPCNT: 3,  # Disconnect after 3 consecutive failed probes
+                    socket.TCP_KEEPINTVL: 10,  # Probe interval 10 seconds
                 },
-                # 健康检查与重试
-                health_check_interval=25,  # 略小于服务器 timeout 或 TCP Keepidle
-                retry=retry,  # 注入重试实例
+                # Health check and retry
+                health_check_interval=25,  # Slightly less than server timeout or TCP Keepidle
+                retry=retry,  # Inject retry instance
                 retry_on_timeout=True,
-                retry_on_error=[ConnectionError, TimeoutError],  # 指定错误类型重试
+                retry_on_error=[ConnectionError, TimeoutError],  # Retry on specified error types
                 max_connections=50,
             )
             return self._pool
@@ -67,12 +67,12 @@ class RedisClient:
             self._client = Redis(
                 connection_pool=pool,
                 retry_on_timeout=True,
-                retry_on_error=[RedisConnectionError],  # 连接错误时重试
+                retry_on_error=[RedisConnectionError],  # Retry on connection errors
             )
         return self._client
 
     async def close(self) -> None:
-        """关闭当前实例的 Redis 连接池和客户端"""
+        """Close the current instance's Redis connection pool and client"""
         try:
             if self._client is not None:
                 await self._client.aclose()
@@ -86,10 +86,10 @@ class RedisClient:
 
     async def check_health(self) -> bool:
         """
-        检查当前实例的 Redis 连接健康状态
+        Check the health status of the current instance's Redis connection
 
         Returns:
-            bool: True 表示连接健康，False 表示连接异常
+            bool: True means connection is healthy, False means connection is abnormal
         """
         try:
             client = self.get_client()
@@ -100,27 +100,27 @@ class RedisClient:
 
     async def reconnect(self) -> None:
         """
-        重新连接当前实例的 Redis
+        Reconnect the current instance's Redis
 
         Raises:
-            RedisError: 当重连失败时抛出异常
+            RedisError: Raises exception when reconnection fails
         """
 
-        # 先关闭现有连接
+        # Close existing connection first
         await self.close()
 
-        # 重新创建连接
+        # Recreate connection
         self._create_connection_pool()
         # type: ignore[arg-type]
         self._client = Redis(connection_pool=self._pool)
 
-        # 验证连接
+        # Verify connection
         if not await self.check_health():
             raise RedisError("Failed to reconnect to Redis...", exc_info=True)
 
 
-# ------- 默认实例（保持兼容，也方便直接用一个默认 Redis） --------
-default_redis = RedisClient()  # 默认使用 app_config.redis_config.cache_url
+# ------- Default instance (maintain compatibility, also convenient to use a default Redis directly) --------
+default_redis = RedisClient()  # Defaults to app_config.redis_config.cache_url
 redis_client = default_redis.get_client()
 
 

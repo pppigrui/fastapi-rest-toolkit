@@ -55,7 +55,7 @@ class DefaultRouter:
             async with session.begin():
                 return await vs.destroy(request, session, pk)
 
-        # 一个字典同时管理：endpoint、HTTP 方法、是否 detail
+        # A dictionary that manages: endpoint, HTTP method, and is detail
         routes = {
             "list": (list_ep, "GET", False),
             "create": (create_ep, "POST", False),
@@ -98,7 +98,7 @@ class DefaultRouter:
                         return await action_func(request, session)
                 return endpoint
 
-        # 注册自定义 actions
+        # Register custom actions
         custom_actions = get_actions(vs)
         for action_name, action_config in custom_actions.items():
             action_func = action_config["func"]

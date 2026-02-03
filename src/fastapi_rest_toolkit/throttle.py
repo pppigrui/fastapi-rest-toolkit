@@ -9,12 +9,12 @@ from .request import FRFRequest
 
 class BaseThrottle(ABC):
     """
-    基础限流类
+    Base throttle class
 
-    所有限流类都应该继承此类并实现 allow_request 方法。
+    All throttle classes should inherit from this class and implement the allow_request method.
     """
 
-    # 是否在缓存中存储限流信息
+    # Whether to store throttle information in cache
     cache = defaultdict(list)
     ident_cache: Dict[str, list] = defaultdict[str, list](list)
 
@@ -24,35 +24,35 @@ class BaseThrottle(ABC):
     @abstractmethod
     def allow_request(self, request: FRFRequest, view) -> bool:
         """
-        判断是否允许请求
+        Determine whether to allow the request
 
         Args:
-            request: FRFRequest 对象
-            view: ViewSet 实例
+            request: FRFRequest object
+            view: ViewSet instance
 
         Returns:
-            bool: True 表示允许请求，False 表示拒绝
+            bool: True means allow request, False means reject
         """
         pass
 
     def get_ident(self, request: FRFRequest) -> str:
         """
-        获取请求的唯一标识符
+        Get the unique identifier for the request
 
-        优先级：
-        1. 认证用户 -> user.id
-        2. 匿名用户 -> IP 地址
+        Priority:
+        1. Authenticated user -> user.id
+        2. Anonymous user -> IP address
 
         Args:
-            request: FRFRequest 对象
+            request: FRFRequest object
 
         Returns:
-            str: 唯一标识符
+            str: Unique identifier
         """
         if request.user and hasattr(request.user, "id"):
             return f"user:{request.user.id}"
 
-        # 获取 IP 地址
+        # Get IP address
         if request.raw.client and request.raw.client.host:
             return f"ip:{request.raw.client.host}"
 
@@ -60,32 +60,32 @@ class BaseThrottle(ABC):
 
     def get_rate(self) -> Optional[str]:
         """
-        获取限流速率
+        Get the throttle rate
 
-        格式: "数量/周期"
-        例如:
-        - "100/day"  - 每天 100 次
-        - "10/hour"  - 每小时 10 次
-        - "5/minute" - 每分钟 5 次
-        - "1/second" - 每秒 1 次
+        Format: "number/period"
+        Examples:
+        - "100/day"  - 100 times per day
+        - "10/hour"  - 10 times per hour
+        - "5/minute" - 5 times per minute
+        - "1/second" - 1 time per second
 
         Returns:
-            Optional[str]: 限流速率字符串，None 表示不限流
+            Optional[str]: Throttle rate string, None means no throttling
         """
         return None
 
     def parse_rate(self, rate: str) -> Tuple[int, int]:
         """
-        解析限流速率字符串
+        Parse the throttle rate string
 
         Args:
-            rate: 限流速率字符串 (如 "100/day")
+            rate: Throttle rate string (e.g., "100/day")
 
         Returns:
-            Tuple[int, int]: (数量, 周期秒数)
+            Tuple[int, int]: (number, period seconds)
 
         Raises:
-            ValueError: 如果速率格式无效
+            ValueError: If the rate format is invalid
         """
         if not rate:
             return (None, None)
@@ -93,7 +93,7 @@ class BaseThrottle(ABC):
         num, period = rate.split("/")
         num = int(num)
 
-        # 周期映射
+        # Period mapping
         period_map = {
             "second": 1,
             "seconds": 1,
@@ -115,8 +115,8 @@ class BaseThrottle(ABC):
 
     def throttle_failure(self):
         """
-        限流拒绝时触发
-        抛出 HTTP 429 错误
+        Triggered when throttle rejects the request
+        Raises HTTP 429 error
         """
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -125,24 +125,24 @@ class BaseThrottle(ABC):
 
     def wait(self) -> float:
         """
-        计算需要等待的时间（秒）
+        Calculate the required wait time (seconds)
 
         Returns:
-            float: 等待秒数
+            float: Wait seconds
         """
         return 0.0
 
 
 class SimpleRateThrottle(BaseThrottle):
     """
-    简单限流基类
+    Simple throttle base class
 
-    基于 get_rate() 返回的速率进行限流。
-    使用 ident 作为限流 key。
+    Performs throttling based on the rate returned by get_rate().
+    Uses ident as the throttle key.
     """
 
-    scope: Optional[str] = None  # 限流作用域名称
-    THROTTLE_RATES: Dict[str, str] = {}  # 全局限流配置
+    scope: Optional[str] = None  # Throttle scope name
+    THROTTLE_RATES: Dict[str, str] = {}  # Global throttle configuration
 
     def __init__(self):
         super().__init__()
@@ -151,11 +151,11 @@ class SimpleRateThrottle(BaseThrottle):
 
     def get_rate(self) -> Optional[str]:
         """
-        获取限流速率
+        Get the throttle rate
 
-        优先级：
-        1. 查看是否有 scope 定义，从 THROTTLE_RATES 获取
-        2. 查看类属性 rate
+        Priority:
+        1. Check if scope is defined, get from THROTTLE_RATES
+        2. Check class attribute rate
         """
         if self.scope is not None:
             return self.THROTTLE_RATES.get(self.scope)
@@ -164,14 +164,14 @@ class SimpleRateThrottle(BaseThrottle):
 
     def allow_request(self, request: FRFRequest, view) -> bool:
         """
-        判断是否允许请求
+        Determine whether to allow the request
 
         Args:
-            request: FRFRequest 对象
-            view: ViewSet 实例
+            request: FRFRequest object
+            view: ViewSet instance
 
         Returns:
-            bool: True 表示允许，False 表示拒绝
+            bool: True means allow, False means reject
         """
         if self.rate is None:
             return True
@@ -183,44 +183,44 @@ class SimpleRateThrottle(BaseThrottle):
         self.ident_cache.setdefault(self.key, [])
         history = self.ident_cache[self.key]
 
-        # 获取当前时间
+        # Get current time
         now = self.timer()
 
-        # 移除过期记录
+        # Remove expired records
         while history and history[-1] <= now - self.duration:
             history.pop()
 
-        # 检查是否超过限流
+        # Check if throttle limit is exceeded
         if len(history) >= self.num_requests:
             return self.throttle_failure()
 
-        # 记录本次请求
+        # Record this request
         history.insert(0, now)
 
         return True
 
     def get_cache_key(self, request: FRFRequest, view) -> Optional[str]:
         """
-        获取缓存 key
+        Get the cache key
 
-        默认使用 ident，子类可以重写此方法来自定义 key
+        By default uses ident, subclasses can override this method to customize the key
 
         Args:
-            request: FRFRequest 对象
-            view: ViewSet 实例
+            request: FRFRequest object
+            view: ViewSet instance
 
         Returns:
-            Optional[str]: 缓存 key
+            Optional[str]: Cache key
         """
         ident = self.get_ident(request)
         return f"{self.scope or 'throttle'}:{ident}"
 
     def wait(self) -> float:
         """
-        计算需要等待的时间
+        Calculate the required wait time
 
         Returns:
-            float: 等待秒数
+            float: Wait seconds
         """
         if self.key not in self.ident_cache:
             return 0.0
@@ -229,15 +229,15 @@ class SimpleRateThrottle(BaseThrottle):
         if not history:
             return 0.0
 
-        # 等待时间 = 最旧的请求时间 + 限流周期 - 当前时间
+        # Wait time = oldest request time + throttle period - current time
         return self.duration - (self.timer() - history[-1])
 
 
 class AsyncRedisSimpleRateThrottle(SimpleRateThrottle):
     """
-    异步 Redis 简单限流类
+    Async Redis simple throttle class
 
-    基于 Redis 存储限流信息，支持分布式部署。
+    Stores throttle information based on Redis, supports distributed deployment.
     """
 
     scope = "anon_redis_simple"
@@ -251,7 +251,7 @@ class AsyncRedisSimpleRateThrottle(SimpleRateThrottle):
 
     async def allow_request(self, request: FRFRequest, view) -> bool:
         """
-        判断是否允许请求
+        Determine whether to allow the request
         """
         if self.rate is None:
             return True
@@ -277,16 +277,16 @@ class AsyncRedisSimpleRateThrottle(SimpleRateThrottle):
 
 class AnonRateThrottle(SimpleRateThrottle):
     """
-    匿名用户限流
+    Anonymous user throttle
 
-    仅对未认证用户进行限流。
+    Only throttles unauthenticated users.
     """
 
     scope = "anon"
 
     def get_cache_key(self, request: FRFRequest, view) -> Optional[str]:
         """
-        匿名用户使用 IP 作为 key
+        Anonymous users use IP as key
         """
         if request.user and hasattr(request.user, "id"):
             return None

@@ -1,40 +1,34 @@
 # FastAPI REST Toolkit
 
-类 Django REST Framework 风格的 FastAPI 工具包，提供简洁优雅的方式来构建 RESTful API。
+A Django REST Framework style toolkit for FastAPI, providing a clean and elegant way to build RESTful APIs.
 
-## 特性
+## Features
 
-- **ViewSet**: 类似 DRF 的 ViewSet，支持完整的 CRUD 操作
-- **Router**: 自动路由注册，简化路由配置
-- **认证系统**: 灵活的认证机制（Bearer Token 等）
-- **权限系统**: 灵活的权限控制（AllowAny、IsAuthenticated、IsAdmin）
-- **过滤器**: 支持搜索、排序、CRUD Plus 过滤
-- **节流**: 内置限流机制，支持 Redis 存储
-- **分页**: 内置 LimitOffset 分页
-- **关联加载**: 支持 SQLAlchemy 关联数据预加载
-- **Schema 工具**: 从 SQLAlchemy 模型自动生成 Pydantic Schema
+- **ViewSet**: DRF-like ViewSet with full CRUD operations support
+- **Router**: Automatic route registration, simplified routing configuration
+- **Authentication System**: Flexible authentication mechanisms (Bearer Token, etc.)
+- **Permission System**: Flexible permission control (AllowAny, IsAuthenticated, IsAdmin)
+- **Filters**: Support for search, ordering, and CRUD Plus filtering
+- **Throttling**: Built-in rate limiting with Redis storage support
+- **Pagination**: Built-in LimitOffset pagination
+- **Relation Loading**: Support for SQLAlchemy relationship data preloading
+- **Schema Tools**: Automatically generate Pydantic Schemas from SQLAlchemy models
 
-## 安装
+## Installation
 
 ```bash
 pip install fastapi-rest-toolkit
 ```
 
-或安装包含 Redis 依赖的完整版本：
+Or install the full version with Redis dependencies:
 
 ```bash
 pip install fastapi-rest-toolkit[all]
 ```
 
-## 安装
+## Quick Start
 
-```bash
-pip install fastapi-rest-toolkit
-```
-
-## 快速开始
-
-### 完整示例
+### Complete Example
 
 ```python
 from fastapi import FastAPI
@@ -53,7 +47,7 @@ from fastapi_rest_toolkit import (
 from sqlalchemy_crud_plus import CRUDPlus
 from app.db.redis import redis_client
 
-# 1. 定义 SQLAlchemy 模型
+# 1. Define SQLAlchemy model
 class User(Base):
     __tablename__ = 'users'
 
@@ -62,7 +56,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(100), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-# 2. 定义 Schema（手动或自动生成）
+# 2. Define Schemas (manually or auto-generated)
 from pydantic import BaseModel
 
 class UserRead(BaseModel):
@@ -78,27 +72,27 @@ class UserUpdate(BaseModel):
     email: str | None = None
     name: str | None = None
 
-# 3. 定义 ViewSet
+# 3. Define ViewSet
 class UserViewSet(ViewSet):
     read_schema = UserRead
     create_schema = UserCreate
     update_schema = UserUpdate
 
-    # 权限配置
+    # Permission configuration
     permission_classes = (AllowAny, IsAuthenticated)
 
-    # 搜索和排序
+    # Search and ordering
     search_fields = ("email", "name")
     ordering_fields = ("id", "email", "name", "created_at")
 
-    # 节流配置
+    # Throttle configuration
     throttle_classes = (AsyncRedisSimpleRateThrottle(redis=redis_client),)
 
     def __init__(self):
         user_crud = CRUDPlus(User)
         self.service = CRUDService(crud=user_crud, model=User)
 
-# 4. 创建数据库会话
+# 4. Create database session
 DATABASE_URL = "sqlite+aiosqlite:///./app.db"
 engine = create_async_engine(DATABASE_URL, echo=False)
 async_session = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
@@ -107,7 +101,7 @@ async def get_session():
     async with async_session() as session:
         yield session
 
-# 5. 注册路由
+# 5. Register routes
 app = FastAPI()
 router = DefaultRouter()
 
@@ -121,9 +115,9 @@ router.register(
 app.include_router(router.router, prefix="/api")
 ```
 
-### 认证系统
+### Authentication System
 
-支持自定义认证类，继承 `BaseAuthentication` 实现认证逻辑：
+Support custom authentication classes by extending `BaseAuthentication`:
 
 ```python
 from fastapi import HTTPException, status
@@ -142,52 +136,52 @@ class UserAuthentication(BearerAuthentication):
                 detail="Invalid authentication"
             )
 
-        # 验证 token 并获取用户
+        # Verify token and get user
         user = await self.verify_token(token, session)
         return user, token
 
-# 在 ViewSet 中使用
+# Use in ViewSet
 class UserViewSet(ViewSet):
     authentication_classes = (UserAuthentication,)
     permission_classes = (IsAuthenticated,)
 ```
 
-### 自动生成 Schema
+### Auto-generate Schemas
 
-使用工具函数从 SQLAlchemy 模型自动生成 Pydantic Schema：
+Use utility functions to automatically generate Pydantic Schemas from SQLAlchemy models:
 
 ```python
 from fastapi_rest_toolkit.utils import sqlalchemy_model_to_pydantic
 from app.models.user import User
 
-# 自动生成 Schema
+# Auto-generate schemas
 UserRead = sqlalchemy_model_to_pydantic(User, name="UserRead")
 UserCreate = sqlalchemy_model_to_pydantic(User, name="UserCreate", exclude={"id"})
 UserUpdate = sqlalchemy_model_to_pydantic(User, name="UserUpdate", optional=True)
 ```
 
-### 关联数据加载
+### Relationship Data Loading
 
-支持加载关联数据（使用 selectinload）：
+Support loading related data (using selectinload):
 
 ```python
 class UserViewSet(ViewSet):
-    load_strategies = ("posts",)  # 自动加载 posts 关联
+    load_strategies = ("posts",)  # Auto-load posts relationship
 ```
 
-### 权限控制
+### Permission Control
 
 ```python
 from fastapi_rest_toolkit import AllowAny, IsAuthenticated, IsAdmin
 
 class ProtectedViewSet(ViewSet):
-    permission_classes = (IsAuthenticated,)  # 需要登录
+    permission_classes = (IsAuthenticated,)  # Requires login
 
 class AdminViewSet(ViewSet):
-    permission_classes = (IsAdmin,)  # 需要管理员权限
+    permission_classes = (IsAdmin,)  # Requires admin privileges
 ```
 
-**自定义权限类：**
+**Custom Permission Class:**
 
 ```python
 from fastapi_rest_toolkit.permissions import BasePermission
@@ -198,9 +192,9 @@ class IsOwner(BasePermission):
         return request.user and request.user.id == int(request.path_params["id"])
 ```
 
-### 分页
+### Pagination
 
-内置 `LimitOffsetPagination` 分页支持：
+Built-in `LimitOffsetPagination` support:
 
 ```python
 from fastapi_rest_toolkit import ViewSet, LimitOffsetPagination
@@ -213,37 +207,37 @@ class UserViewSet(ViewSet):
     pagination = CustomPagination()
 ```
 
-**API 使用示例：**
+**API Usage Example:**
 
 ```bash
 GET /api/users?limit=10&offset=0
 ```
 
-### 搜索和排序
+### Search and Ordering
 
 ```python
 class UserViewSet(ViewSet):
-    # 支持搜索的字段
+    # Searchable fields
     search_fields = ("name", "email")
 
-    # 支持排序的字段
+    # Orderable fields
     ordering_fields = ("id", "name", "created_at")
 ```
 
-**API 使用示例：**
+**API Usage Example:**
 
 ```bash
-# 搜索
+# Search
 GET /api/users?search=john
 
-# 排序
+# Order
 GET /api/users?ordering=-created_at
 
-# 组合使用
+# Combined
 GET /api/users?search=john&ordering=name
 ```
 
-### 节流配置
+### Throttle Configuration
 
 ```python
 from fastapi_rest_toolkit.throttle import AsyncRedisSimpleRateThrottle
@@ -252,17 +246,17 @@ from app.db.redis import redis_client
 class UserViewSet(ViewSet):
     throttle_classes = (AsyncRedisSimpleRateThrottle(
         redis=redis_client,
-        rate="100/hour"  # 可选，默认 100/hour
+        rate="100/hour"  # Optional, defaults to 100/hour
     ),)
 ```
 
-**可用节流类：**
+**Available Throttle Classes:**
 
-- `SimpleRateThrottle` - 简单限流（内存存储）
-- `AnonRateThrottle` - 匿名用户限流
-- `AsyncRedisSimpleRateThrottle` - 基于 Redis 的异步限流
+- `SimpleRateThrottle` - Simple rate limiting (in-memory storage)
+- `AnonRateThrottle` - Anonymous user rate limiting
+- `AsyncRedisSimpleRateThrottle` - Async rate limiting based on Redis
 
-### 异常处理
+### Exception Handling
 
 ```python
 from fastapi import Request
@@ -270,7 +264,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
 async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
-    """处理数据库完整性约束错误"""
+    """Handle database integrity constraint errors"""
     error_message = str(exc.orig)
 
     if "UNIQUE constraint failed" in error_message:
@@ -278,7 +272,7 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
         if len(parts) > 1:
             constraint_info = parts[1].strip()
             field = constraint_info.split(".")[-1] if "." in constraint_info else constraint_info
-            detail = f"{field} 已存在"
+            detail = f"{field} already exists"
     else:
         detail = error_message
 
@@ -287,79 +281,79 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
         content={"detail": detail, "error_type": "integrity_error"}
     )
 
-# 注册异常处理器
+# Register exception handler
 app.add_exception_handler(IntegrityError, integrity_error_handler)
 ```
 
-### 自定义方法行为
+### Custom Method Behavior
 
-可以通过覆盖方法来自定义行为：
+Customize behavior by overriding methods:
 
 ```python
 class UserViewSet(ViewSet):
     async def create(self, request: FRFRequest):
-        # 自定义创建逻辑
+        # Custom create logic
         data = await request.json()
-        # ... 自定义处理
+        # ... custom handling
         return await super().create(request)
 
     async def destroy(self, request: FRFRequest, id: int):
-        # 自定义删除逻辑
-        # ... 检查权限等
+        # Custom delete logic
+        # ... check permissions, etc.
         return await super().destroy(request, id)
 ```
 
-## 组件说明
+## Component Documentation
 
 ### ViewSet
 
-提供标准的 CRUD 操作接口：
+Provides standard CRUD operation interfaces:
 
-| 方法 | 路由 | 说明 |
-|------|------|------|
-| `list()` | `GET /api/users` | 获取列表（支持搜索、排序、分页） |
-| `retrieve()` | `GET /api/users/{id}` | 获取单个对象 |
-| `create()` | `POST /api/users` | 创建对象 |
-| `update()` | `PUT/PATCH /api/users/{id}` | 更新对象 |
-| `destroy()` | `DELETE /api/users/{id}` | 删除对象 |
+| Method | Route | Description |
+|--------|-------|-------------|
+| `list()` | `GET /api/users` | Get list (supports search, ordering, pagination) |
+| `retrieve()` | `GET /api/users/{id}` | Get single object |
+| `create()` | `POST /api/users` | Create object |
+| `update()` | `PUT/PATCH /api/users/{id}` | Update object |
+| `destroy()` | `DELETE /api/users/{id}` | Delete object |
 
-**ViewSet 配置选项：**
+**ViewSet Configuration Options:**
 
 ```python
 class ViewSet:
-    # Schema 配置
-    read_schema: Type[BaseModel]      # 读取数据的 Schema
-    create_schema: Type[BaseModel]    # 创建数据的 Schema
-    update_schema: Type[BaseModel]    # 更新数据的 Schema
+    # Schema configuration
+    read_schema: Type[BaseModel]      # Schema for reading data
+    create_schema: Type[BaseModel]    # Schema for creating data
+    update_schema: Type[BaseModel]    # Schema for updating data
 
-    # 认证和权限
-    authentication_classes: Sequence[Type[BaseAuthentication]]  # 认证类
-    permission_classes: Sequence[Type[BasePermission]]          # 权限类
+    # Authentication and permissions
+    authentication_classes: Sequence[Type[BaseAuthentication]]  # Authentication classes
+    permission_classes: Sequence[Type[BasePermission]]          # Permission classes
 
-    # 过滤和排序
-    search_fields: Sequence[str]       # 可搜索字段
-    ordering_fields: Sequence[str]     # 可排序字段
-    filter_backends: Sequence          # 过滤器后端
+    # Filtering and ordering
+    search_fields: Sequence[str]       # Searchable fields
+    ordering_fields: Sequence[str]     # Orderable fields
+    filter_backends: Sequence          # Filter backends
 
-    # 分页和节流
-    pagination: LimitOffsetPagination  # 分页配置
-    throttle_classes: Sequence[Type[BaseThrottle]]  # 节流类
-    throttle_scope: str                # 节流作用域
+    # Pagination and throttling
+    pagination: LimitOffsetPagination  # Pagination configuration
+    throttle_classes: Sequence[Type[BaseThrottle]]  # Throttle classes
+    throttle_scope: str                # Throttle scope
 
-    # 关联加载
-    load_strategies: Sequence[str]     # 预加载的关联字段
-    join_conditions: Any               # join 条件
+    # Relationship loading
+    load_strategies: Sequence[str]     # Preloaded relationship fields
+    join_conditions: Any               # Join conditions
 
-    # 允许的 HTTP 方法
-    allowed_methods: Sequence[str]     # 默认为所有 CRUD 方法
+    # Allowed HTTP methods
+    allowed_methods: Sequence[str]     # Defaults to all CRUD methods
 ```
 
-### 认证类
+### Authentication Classes
 
-- `BaseAuthentication` - 认证基类
-- `BearerAuthentication` - Bearer Token 认证基类
+- `BaseAuthentication` - Base authentication class
+- `BearerAuthentication` - Base Bearer Token authentication class
 
-**自定义认证：**
+**Custom Authentication:**
 
 ```python
 from fastapi_rest_toolkit.authentication import BaseAuthentication
@@ -367,66 +361,66 @@ from fastapi_rest_toolkit.request import FRFRequest
 
 class CustomAuth(BaseAuthentication):
     async def authenticate(self, request: FRFRequest) -> tuple[Any, Any]:
-        # 返回 (user, auth) 或 (None, None)
+        # Return (user, auth) or (None, None)
         pass
 ```
 
-### 权限类
+### Permission Classes
 
-- `AllowAny` - 允许所有访问
-- `IsAuthenticated` - 需要认证
-- `IsAdmin` - 需要管理员权限
-- `BasePermission` - 自定义权限基类
+- `AllowAny` - Allow all access
+- `IsAuthenticated` - Requires authentication
+- `IsAdmin` - Requires admin privileges
+- `BasePermission` - Custom permission base class
 
-### 过滤器
+### Filters
 
-- `SearchFilterBackend` - 搜索过滤（使用 `search` 查询参数）
-- `OrderingFilterBackend` - 排序（使用 `ordering` 查询参数）
-- `CRUDPlusFilterBackend` - CRUD Plus 过滤
+- `SearchFilterBackend` - Search filtering (using `search` query parameter)
+- `OrderingFilterBackend` - Ordering (using `ordering` query parameter)
+- `CRUDPlusFilterBackend` - CRUD Plus filtering
 
-### 节流类
+### Throttle Classes
 
-- `SimpleRateThrottle` - 简单限流（内存存储）
-- `AnonRateThrottle` - 匿名用户限流
-- `AsyncRedisSimpleRateThrottle` - 基于 Redis 的异步限流
+- `SimpleRateThrottle` - Simple rate limiting (in-memory storage)
+- `AnonRateThrottle` - Anonymous user rate limiting
+- `AsyncRedisSimpleRateThrottle` - Async rate limiting based on Redis
 
 ### Router
 
-`DefaultRouter` 自动为 ViewSet 注册路由：
+`DefaultRouter` automatically registers routes for ViewSets:
 
 ```python
 router = DefaultRouter()
 router.register(
-    prefix="users",           # URL 前缀
-    viewset=UserViewSet,      # ViewSet 类
-    get_session=get_session,  # 数据库会话获取函数
-    tags=["users"],           # OpenAPI 标签
+    prefix="users",           # URL prefix
+    viewset=UserViewSet,      # ViewSet class
+    get_session=get_session,  # Database session getter function
+    tags=["users"],           # OpenAPI tags
 )
 app.include_router(router.router, prefix="/api")
 ```
 
-### 工具函数
+### Utility Functions
 
-- `sqlalchemy_model_to_pydantic()` - 从 SQLAlchemy 模型生成 Pydantic Schema
+- `sqlalchemy_model_to_pydantic()` - Generate Pydantic Schema from SQLAlchemy model
 
-## 完整 Demo
+## Complete Demo
 
-查看 [demo](./demo/) 目录获取完整的使用示例，包括：
+See the [demo](./demo/) directory for complete usage examples, including:
 
-- 数据库模型定义
-- JWT 认证实现
-- Redis 节流配置
-- 异常处理
-- 多种 ViewSet 实现
+- Database model definitions
+- JWT authentication implementation
+- Redis throttle configuration
+- Exception handling
+- Multiple ViewSet implementations
 
-运行示例：
+Run the example:
 
 ```bash
 cd demo
 uvicorn main:app --reload
 ```
 
-API 文档访问：http://127.0.0.1:8000/docs
+Access API documentation at: http://127.0.0.1:8000/docs
 
 ## License
 
