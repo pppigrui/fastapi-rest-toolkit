@@ -8,13 +8,10 @@ from src.fastapi_rest_toolkit.throttle import AsyncRedisSimpleRateThrottle
 from src.fastapi_rest_toolkit.service import CRUDService
 
 from app.models.post import Post
-from app.schemas.post import PostRead, PostCreate, PostUpdate
 
 
 class PostViewSet(ViewSet):
-    read_schema = PostRead
-    create_schema = PostCreate
-    update_schema = PostUpdate
+    model = Post
 
     permission_classes = (
         AllowAny,

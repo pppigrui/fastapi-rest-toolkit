@@ -9,14 +9,11 @@ from src.fastapi_rest_toolkit.throttle import AsyncRedisSimpleRateThrottle
 from src.fastapi_rest_toolkit.service import CRUDService
 
 from app.models.user import User
-from app.schemas.user import UserRead, UserCreate, UserUpdate
 from app.deps.auth import UserAuthentication
 from src.fastapi_rest_toolkit.decorators import action
 
 class UserViewSet(ViewSet):
-    read_schema = UserRead
-    create_schema = UserCreate
-    update_schema = UserUpdate
+    model = User
     authentication_classes = (UserAuthentication,)  # Custom authentication
 
     # Demo: Requires login by default. You can change to AllowAny to open registration

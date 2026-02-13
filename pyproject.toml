@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fastapi-rest-toolkit"
-version = "0.0.5"  # 记得比你已发布的版本号大（不能覆盖）
+version = "0.0.6"  # 记得比你已发布的版本号大（不能覆盖）
 description = "类DRF风格的FastAPI工具包"
 readme = "README.md"
 requires-python = ">=3.12"

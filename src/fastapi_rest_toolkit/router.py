@@ -19,6 +19,7 @@ class DefaultRouter:
         pk_type=int,
     ):
         vs: ViewSet = viewset_cls()
+        vs.init_schema()  # init schemas for the viewset
 
         async def build_request(req: Request) -> FRFRequest:
             return await FRFRequest.from_fastapi(req)
@@ -43,13 +44,7 @@ class DefaultRouter:
             async with session.begin():
                 return await vs.update(request, session, pk)
 
-        async def patch_ep(
-            pk: pk_type, request=Depends(build_request), session=Depends(get_session)
-        ):
-            async with session.begin():
-                return await vs.partial_update(request, session, pk)
-
-        async def delete_ep(
+        async def destroy_ep(
             pk: pk_type, request=Depends(build_request), session=Depends(get_session)
         ):
             async with session.begin():
@@ -61,22 +56,26 @@ class DefaultRouter:
             "create": (create_ep, "POST", False),
             "retrieve": (retrieve_ep, "GET", True),
             "update": (update_ep, "PUT", True),
-            "partial_update": (patch_ep, "PATCH", True),
-            "destroy": (delete_ep, "DELETE", True),
+            "destroy": (destroy_ep, "DELETE", True),
         }
 
-        for action in vs.allowed_methods:
+        for action in vs.allowed_actions:
             if action not in routes:
                 continue
 
             func, http_method, detail = routes[action]
-            path = f"/{prefix}/{{pk:{pk_type}}}" if detail else f"/{prefix}"
+            if isinstance(pk_type, int):
+                pk_type_str = "int"
+            else:
+                pk_type_str = "str"
 
+            path = f"/{prefix}/{{pk:{pk_type_str}}}" if detail else f"/{prefix}"
             self.router.add_api_route(
                 path,
                 func,
                 methods=[http_method],
                 tags=tags,
+                name=f"{prefix}_{action}",
             )
 
         def make_action_endpoint(action_func, detail: bool):

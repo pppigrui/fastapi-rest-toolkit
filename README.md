@@ -74,10 +74,10 @@ class UserUpdate(BaseModel):
 
 # 3. Define ViewSet
 class UserViewSet(ViewSet):
-    read_schema = UserRead
-    create_schema = UserCreate
-    update_schema = UserUpdate
-
+    # read_schema = UserRead
+    # create_schema = UserCreate
+    # update_schema = UserUpdate
+    model = User  # only define model for sqlalchemy
     # Permission configuration
     permission_classes = (AllowAny, IsAuthenticated)
 

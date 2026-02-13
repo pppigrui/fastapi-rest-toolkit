@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from inspect import iscoroutinefunction
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import DeclarativeBase
 from .service import CRUDService
 from .contextvar import ordering_parsed, session_var
 from .filters import CRUDPlusFilterBackend, SearchFilterBackend, OrderingFilterBackend
@@ -11,6 +12,7 @@ from .permissions import BasePermission
 from .throttle import BaseThrottle
 from .authentication import BaseAuthentication
 from .request import FRFRequest
+from .utils import sqlalchemy_model_to_pydantic
 
 
 class LimitOffsetPagination:
@@ -30,6 +32,7 @@ class LimitOffsetPagination:
 
 
 class ViewSet:
+    model: Type[DeclarativeBase] = None
     service: CRUDService = None
     read_schema = None
     create_schema = None
@@ -51,7 +54,7 @@ class ViewSet:
     join_conditions: Optional[Any] = None
     throttle_scope: Optional[str] = None
 
-    allowed_methods = ("list", "retrieve", "create", "update", "partial_update", "destroy")
+    allowed_actions = ("list", "retrieve", "create", "update", "destroy")
 
     def get_authentications(self):
         return [
@@ -173,7 +176,7 @@ class ViewSet:
             join_conditions=self.join_conditions,
         )
         if not obj:
-            raise HTTPException(status_code=404, detail="Not found")
+            raise HTTPException(status_code=status.HTTP_200_OK, detail="Not found")
         await self.check_object_permissions(request, obj)
         return self.serialize(obj)
 
@@ -190,20 +193,36 @@ class ViewSet:
         obj = await self.service.retrieve(session, pk=pk)
         return self.serialize(obj)
 
-    async def partial_update(self, request: FRFRequest, session: AsyncSession, pk: Any):
-        await self._check(request, session=session)
-        obj_in = self.update_schema(**(request.data or {})).model_dump(
-            exclude_unset=True
-        )
-        await self.service.update(session, pk=pk, obj_in=obj_in)
-        obj = await self.service.retrieve(session, pk=pk)
-        return self.serialize(obj)
-
     async def destroy(self, request: FRFRequest, session: AsyncSession, pk: Any):
         await self._check(request, session=session)
         obj = await self.service.retrieve(session, pk=pk)
         if not obj:
-            raise HTTPException(status_code=404, detail="Not found")
+            raise HTTPException(status_code=status.HTTP_200_OK, detail="Not found")
         await self.check_object_permissions(request, obj)
         await self.service.destroy(session, pk=pk)
         return None
+
+
+    def init_schema(self):
+        
+        if self.model is None or not issubclass(self.model, DeclarativeBase):
+            return
+        if all([
+            "list" in self.allowed_actions or "retrieve" in self.allowed_actions or "destroy" in self.allowed_actions,
+            self.read_schema is None,
+        ]):
+            self.read_schema = sqlalchemy_model_to_pydantic(self.model, name="Read")
+            
+        if all([
+            "create" in self.allowed_actions,
+            self.create_schema is None,
+        ]):
+            self.create_schema = sqlalchemy_model_to_pydantic(self.model, name="Create", mode="create")
+        if all([
+            "update" in self.allowed_actions,
+            self.update_schema is None,
+        ]):
+            self.update_schema = sqlalchemy_model_to_pydantic(self.model, name="Update", mode="update")
+        
+        
+        
