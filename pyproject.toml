@@ -41,6 +41,15 @@ Repository = "https://github.com/pppigrui/fastapi-rest-toolkit"
 "Bug Tracker" = "https://github.com/pppigrui/fastapi-rest-toolkit/issues"
 
 
+[dependency-groups]
+dev = [
+  "uvicorn[standard]>=0.30.0",
+  "sqlalchemy>=2.0.0",
+  "aiosqlite>=0.20.0",
+  "python-jose[cryptography]>=3.3.0",
+  "redis>=5.0.0",
+]
+
 [tool.hatch.build.targets.wheel]
 # 只把库代码打进 wheel（用户 pip install 主要装的就是 wheel）
 packages = ["src/fastapi_rest_toolkit"]

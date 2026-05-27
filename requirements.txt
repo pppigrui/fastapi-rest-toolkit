@@ -1,8 +1,0 @@
-fastapi
-uvicorn[standard]
-sqlalchemy
-aiosqlite
-python-jose[cryptography]
-pydantic>=2.0
-sqlalchemy-crud-plus
-redis
