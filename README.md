@@ -17,6 +17,83 @@ FastAPI REST Toolkit 是一个类 Django REST Framework 风格的 FastAPI 工具
 - 限流：支持内存限流和 Redis 异步限流
 - 自定义 action：支持类似 DRF 的 `@action`
 
+## 使用方法示例
+
+```python
+# 使用demo
+from contextlib import asynccontextmanager
+from fastapi_rest_toolkit import AllowAny, CRUDService, DefaultRouter, ViewSet
+from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import String, DateTime, func
+from sqlalchemy.orm import Mapped, mapped_column
+from datetime import datetime
+from typing import AsyncGenerator
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from fastapi import FastAPI
+from sqlalchemy_crud_plus import CRUDPlus
+
+DATABASE_URL = "sqlite+aiosqlite:///./app.db"
+
+engine = create_async_engine(DATABASE_URL, echo=False)
+async_session = async_sessionmaker(
+    bind=engine, class_=AsyncSession, expire_on_commit=False
+)
+
+
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    async with async_session() as session:
+        yield session
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(50))
+    email: Mapped[str] = mapped_column(String(100), unique=True)
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):  # noqa: ARG001
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+
+
+app = FastAPI(
+    lifespan=lifespan,
+)
+
+
+class UserViewSet(ViewSet):
+    model = User
+    permission_classes = (AllowAny,)
+    search_fields = ("name", "email")
+    ordering_fields = ("id", "name", "email", "created_at")
+
+    def __init__(self):
+        user_crud = CRUDPlus(User)
+        self.service = CRUDService(crud=user_crud, model=User)
+
+
+router = DefaultRouter()
+router.register("users", UserViewSet, get_session=get_session)
+app.include_router(router.router, prefix="/api")
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+
+```
+
 ## 安装
 
 ```bash
@@ -165,13 +242,15 @@ router.register(
 
 默认支持的 action：
 
-| Action | Method | Path |
-| --- | --- | --- |
-| `list` | `GET` | `/api/users` |
-| `create` | `POST` | `/api/users` |
-| `retrieve` | `GET` | `/api/users/{pk}` |
-| `update` | `PUT` | `/api/users/{pk}` |
-| `destroy` | `DELETE` | `/api/users/{pk}` |
+
+| Action     | Method   | Path              |
+| ---------- | -------- | ----------------- |
+| `list`     | `GET`    | `/api/users`      |
+| `create`   | `POST`   | `/api/users`      |
+| `retrieve` | `GET`    | `/api/users/{pk}` |
+| `update`   | `PUT`    | `/api/users/{pk}` |
+| `destroy`  | `DELETE` | `/api/users/{pk}` |
+
 
 可以通过 `allowed_actions` 控制启用的 action：
 
