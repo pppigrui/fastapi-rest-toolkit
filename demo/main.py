@@ -1,5 +1,7 @@
 import sys
-sys.path.append("..")  # noqa
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # noqa
 from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 
@@ -50,21 +52,12 @@ async def dev_token(user_id: int, session=Depends(get_session)):
 
 
 router = DefaultRouter()
-router.register(
-    "users",
-    UserViewSet,
-    get_session=get_session
-)
-router.register(
-    "posts",
-    PostViewSet,
-    get_session=get_session
-)
+router.register("users", UserViewSet, get_session=get_session)
+router.register("posts", PostViewSet, get_session=get_session)
 app.include_router(router.router, prefix="/api")
 
 
 if __name__ == "__main__":
-
     import uvicorn
 
     uvicorn.run(app, host="127.0.0.1", port=8000)

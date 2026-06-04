@@ -12,6 +12,7 @@ from app.models.user import User
 from app.deps.auth import UserAuthentication
 from src.fastapi_rest_toolkit.decorators import action
 
+
 class UserViewSet(ViewSet):
     model = User
     authentication_classes = (UserAuthentication,)  # Custom authentication
@@ -27,6 +28,7 @@ class UserViewSet(ViewSet):
     load_strategies = ("posts",)
     # join_conditions = ["posts"]
     throttle_classes = (AsyncRedisSimpleRateThrottle(redis=redis_client),)
+
     def __init__(self):
         user_crud = CRUDPlus(User)
         self.service = CRUDService(crud=user_crud, model=User)

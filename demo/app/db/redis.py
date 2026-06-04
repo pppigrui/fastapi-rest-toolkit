@@ -17,7 +17,9 @@ class RedisClient:
     """
 
     def __init__(self, redis_url: str | None = None) -> None:
-        self._redis_url = redis_url or os.environ.get("REDIS_URI", "redis://localhost:6379/0")
+        self._redis_url = redis_url or os.environ.get(
+            "REDIS_URI", "redis://localhost:6379/0"
+        )
         self._pool: ConnectionPool | None = None
         self._client: Redis | None = None
 
@@ -46,7 +48,10 @@ class RedisClient:
                 health_check_interval=25,  # Slightly less than server timeout or TCP Keepidle
                 retry=retry,  # Inject retry instance
                 retry_on_timeout=True,
-                retry_on_error=[ConnectionError, TimeoutError],  # Retry on specified error types
+                retry_on_error=[
+                    ConnectionError,
+                    TimeoutError,
+                ],  # Retry on specified error types
                 max_connections=50,
             )
             return self._pool
