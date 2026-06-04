@@ -9,10 +9,15 @@ description = "类DRF风格的FastAPI工具包"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
-authors = [
-  { name = "xiaorui", email = "pppigrui@gmail.com" }
+authors = [{ name = "xiaorui", email = "pppigrui@gmail.com" }]
+keywords = [
+  "fastapi",
+  "rest",
+  "api",
+  "toolkit",
+  "drf",
+  "fastapi-rest-framework",
 ]
-keywords = ["fastapi", "rest", "api", "toolkit", "drf", "fastapi-rest-framework"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
@@ -30,9 +35,7 @@ dependencies = [
 
 [project.optional-dependencies]
 redis = ["redis==8.0.0"]
-all = [
-  "fastapi-rest-toolkit[redis]",
-]
+all = ["fastapi-rest-toolkit[redis]"]
 
 [project.urls]
 Homepage = "https://github.com/pppigrui/fastapi-rest-toolkit"
