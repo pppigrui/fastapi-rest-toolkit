@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional, Type
+from typing import Any, Literal, Optional, Type
 from inspect import getmembers
 
 from pydantic import BaseModel, create_model
@@ -25,9 +25,10 @@ def sqlalchemy_model_to_pydantic(
     sa_model: Type[DeclarativeBase],
     *,
     name: str | None = None,
-    mode: str = "read",  # "read" | "create" | "update"
+    mode: Literal["read", "create", "update"] = "read",
     exclude: set[str] | None = None,
-    overrides: dict[str, Any] | None = None,  # 用于强制某些字段类型，比如 email->EmailStr
+    overrides: dict[str, Any]
+    | None = None,  # 用于强制某些字段类型，比如 email->EmailStr
 ) -> Type[BaseModel]:
     """
     mode:
@@ -35,6 +36,9 @@ def sqlalchemy_model_to_pydantic(
       - create: Excludes auto-increment primary keys and server_default fields (e.g., created_at) by default, nullable->Optional
       - update: All fields Optional (for PATCH)
     """
+    if mode not in {"read", "create", "update"}:
+        raise ValueError("mode must be one of: read, create, update")
+
     exclude = exclude or set()
     overrides = overrides or {}
 
@@ -67,6 +71,8 @@ def sqlalchemy_model_to_pydantic(
             # If there's a Python-side default, include it (server_default not handled here)
             if col.default is not None and getattr(col.default, "is_scalar", False):
                 default = col.default.arg
+            elif mode == "create" and col.nullable:
+                default = None
 
         fields[key] = (py_type, default)
 

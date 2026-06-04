@@ -28,6 +28,7 @@ def action(
                 # detail=False: /prefix/special/
                 pass
     """
+
     def decorator(func):
         # Store action metadata on the function object
         func.is_action = True

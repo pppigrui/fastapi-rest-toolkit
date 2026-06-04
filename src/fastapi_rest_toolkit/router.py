@@ -9,10 +9,20 @@ class DefaultRouter:
     def __init__(self):
         self.router = APIRouter()
 
+    @staticmethod
+    def _pk_type_converter(pk_type) -> str:
+        if pk_type is int:
+            return "int"
+        if pk_type is float:
+            return "float"
+        if pk_type is str:
+            return "str"
+        return "str"
+
     def register(
         self,
         prefix: str,
-        viewset_cls: ViewSet,
+        viewset_cls: type[ViewSet],
         *,
         get_session,
         tags=None,
@@ -20,6 +30,8 @@ class DefaultRouter:
     ):
         vs: ViewSet = viewset_cls()
         vs.init_schema()  # init schemas for the viewset
+        vs.validate_configuration()
+        pk_type_str = self._pk_type_converter(pk_type)
 
         async def build_request(req: Request) -> FRFRequest:
             return await FRFRequest.from_fastapi(req)
@@ -28,7 +40,9 @@ class DefaultRouter:
             async with session.begin():
                 return await vs.list(request, session)
 
-        async def create_ep(request=Depends(build_request), session=Depends(get_session)):
+        async def create_ep(
+            request=Depends(build_request), session=Depends(get_session)
+        ):
             async with session.begin():
                 return await vs.create(request, session)
 
@@ -64,11 +78,6 @@ class DefaultRouter:
                 continue
 
             func, http_method, detail = routes[action]
-            if isinstance(pk_type, int):
-                pk_type_str = "int"
-            else:
-                pk_type_str = "str"
-
             path = f"/{prefix}/{{pk:{pk_type_str}}}" if detail else f"/{prefix}"
             self.router.add_api_route(
                 path,
@@ -80,6 +89,7 @@ class DefaultRouter:
 
         def make_action_endpoint(action_func, detail: bool):
             if detail:
+
                 async def endpoint(
                     pk: pk_type,
                     request=Depends(build_request),
@@ -87,14 +97,17 @@ class DefaultRouter:
                 ):
                     async with session.begin():
                         return await action_func(request, session, pk)
+
                 return endpoint
             else:
+
                 async def endpoint(
                     request=Depends(build_request),
                     session=Depends(get_session),
                 ):
                     async with session.begin():
                         return await action_func(request, session)
+
                 return endpoint
 
         # Register custom actions
@@ -106,7 +119,7 @@ class DefaultRouter:
             url_path = action_config["url_path"]
 
             if detail:
-                path = f"/{prefix}/{{pk:{pk_type}}}/{url_path}"
+                path = f"/{prefix}/{{pk:{pk_type_str}}}/{url_path}"
             else:
                 path = f"/{prefix}/{url_path}"
             action_endpoint = make_action_endpoint(action_func, detail)

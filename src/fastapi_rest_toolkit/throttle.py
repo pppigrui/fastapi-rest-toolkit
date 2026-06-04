@@ -1,10 +1,13 @@
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Optional, Tuple
 from fastapi import HTTPException, status
-from redis.asyncio import Redis
-from .request import FRFRequest
+
+if TYPE_CHECKING:
+    from redis.asyncio import Redis
+    from .request import FRFRequest
+    from .viewset import ViewSet
 
 
 class BaseThrottle(ABC):
@@ -22,7 +25,7 @@ class BaseThrottle(ABC):
         self.timer = time.time
 
     @abstractmethod
-    def allow_request(self, request: FRFRequest, view) -> bool:
+    def allow_request(self, request: "FRFRequest", view: "ViewSet") -> bool:
         """
         Determine whether to allow the request
 
@@ -35,7 +38,7 @@ class BaseThrottle(ABC):
         """
         pass
 
-    def get_ident(self, request: FRFRequest) -> str:
+    def get_ident(self, request: "FRFRequest") -> str:
         """
         Get the unique identifier for the request
 
@@ -44,7 +47,7 @@ class BaseThrottle(ABC):
         2. Anonymous user -> IP address
 
         Args:
-            request: FRFRequest object
+            request: "FRFRequest" object
 
         Returns:
             str: Unique identifier
@@ -74,7 +77,7 @@ class BaseThrottle(ABC):
         """
         return None
 
-    def parse_rate(self, rate: str) -> Tuple[int, int]:
+    def parse_rate(self, rate: Optional[str]) -> Optional[Tuple[int, int]]:
         """
         Parse the throttle rate string
 
@@ -82,13 +85,13 @@ class BaseThrottle(ABC):
             rate: Throttle rate string (e.g., "100/day")
 
         Returns:
-            Tuple[int, int]: (number, period seconds)
+            Optional[Tuple[int, int]]: (number, period seconds), or None
 
         Raises:
             ValueError: If the rate format is invalid
         """
         if not rate:
-            return (None, None)
+            return None
 
         num, period = rate.split("/")
         num = int(num)
@@ -147,7 +150,12 @@ class SimpleRateThrottle(BaseThrottle):
     def __init__(self):
         super().__init__()
         self.rate = self.parse_rate(self.get_rate())
-        self.num_requests, self.duration = self.rate
+        if self.rate is None:
+            self.num_requests = None
+            self.duration = None
+        else:
+            self.num_requests, self.duration = self.rate
+        self.key = None
 
     def get_rate(self) -> Optional[str]:
         """
@@ -162,18 +170,18 @@ class SimpleRateThrottle(BaseThrottle):
 
         return super().get_rate()
 
-    def allow_request(self, request: FRFRequest, view) -> bool:
+    def allow_request(self, request: "FRFRequest", view: "ViewSet") -> bool:
         """
         Determine whether to allow the request
 
         Args:
-            request: FRFRequest object
+            request: "FRFRequest" object
             view: ViewSet instance
 
         Returns:
             bool: True means allow, False means reject
         """
-        if self.rate is None:
+        if self.num_requests is None or self.duration is None:
             return True
 
         self.key = self.get_cache_key(request, view)
@@ -199,14 +207,14 @@ class SimpleRateThrottle(BaseThrottle):
 
         return True
 
-    def get_cache_key(self, request: FRFRequest, view) -> Optional[str]:
+    def get_cache_key(self, request: "FRFRequest", view: "ViewSet") -> Optional[str]:
         """
         Get the cache key
 
         By default uses ident, subclasses can override this method to customize the key
 
         Args:
-            request: FRFRequest object
+            request: "FRFRequest" object
             view: ViewSet instance
 
         Returns:
@@ -222,7 +230,7 @@ class SimpleRateThrottle(BaseThrottle):
         Returns:
             float: Wait seconds
         """
-        if self.key not in self.ident_cache:
+        if self.key is None or self.key not in self.ident_cache:
             return 0.0
 
         history = self.ident_cache[self.key]
@@ -245,32 +253,36 @@ class AsyncRedisSimpleRateThrottle(SimpleRateThrottle):
         "anon_redis_simple": "5/minute",
     }
 
-    def __init__(self, redis: Redis):
+    def __init__(self, redis: "Redis"):
         super().__init__()
         self.redis = redis
 
-    async def allow_request(self, request: FRFRequest, view) -> bool:
+    async def allow_request(self, request: "FRFRequest", view: "ViewSet") -> bool:
         """
         Determine whether to allow the request
         """
-        if self.rate is None:
+        if self.num_requests is None or self.duration is None:
             return True
 
         self.key = self.get_cache_key(request, view)
         if self.key is None:
             return True
 
+        now = self.timer()
         async with self.redis.pipeline(transaction=True) as pipe:
-            pipe.zremrangebyscore(self.key, 0, self.timer() - self.duration)
+            pipe.zremrangebyscore(self.key, 0, now - self.duration)
             pipe.zcard(self.key)
-            pipe.zadd(self.key, {self.timer(): self.timer()})
-            pipe.expire(self.key, self.duration)
             results = await pipe.execute()
 
         current_count = results[1]
 
         if current_count >= self.num_requests:
             return self.throttle_failure()
+
+        async with self.redis.pipeline(transaction=True) as pipe:
+            pipe.zadd(self.key, {now: now})
+            pipe.expire(self.key, self.duration)
+            await pipe.execute()
 
         return True
 
@@ -284,7 +296,7 @@ class AnonRateThrottle(SimpleRateThrottle):
 
     scope = "anon"
 
-    def get_cache_key(self, request: FRFRequest, view) -> Optional[str]:
+    def get_cache_key(self, request: "FRFRequest", view: "ViewSet") -> Optional[str]:
         """
         Anonymous users use IP as key
         """

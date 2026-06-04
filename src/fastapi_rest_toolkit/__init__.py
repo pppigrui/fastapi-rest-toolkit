@@ -18,7 +18,7 @@ from .throttle import (
     BaseThrottle,
     SimpleRateThrottle,
     AnonRateThrottle,
-    AsyncRedisSimpleRateThrottle
+    AsyncRedisSimpleRateThrottle,
 )
 
 __all__ = [
@@ -37,5 +37,5 @@ __all__ = [
     "BaseThrottle",
     "SimpleRateThrottle",
     "AnonRateThrottle",
-    "AsyncRedisSimpleRateThrottle"
+    "AsyncRedisSimpleRateThrottle",
 ]

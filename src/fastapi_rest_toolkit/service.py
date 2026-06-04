@@ -1,10 +1,12 @@
-from typing import Any, Dict, List, Optional, Sequence, Tuple, TypeVar, Generic
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Type, TypeVar, Generic
+
+from sqlalchemy_crud_plus import CRUDPlus
 
 ModelT = TypeVar("ModelT")
 
 
 class CRUDService(Generic[ModelT]):
-    def __init__(self, crud, model):
+    def __init__(self, crud: CRUDPlus, model: Type[ModelT]):
         self.crud = crud
         self.model = model
 
@@ -15,7 +17,7 @@ class CRUDService(Generic[ModelT]):
         filters: Dict[str, Any],
         limit: int,
         offset: int,
-        ordering: Optional[Tuple[str, str]] = None,
+        ordering: Optional[Tuple[list[str], list[str]]] = None,
         load_strategies: Optional[Sequence[str]] = None,
         join_conditions: Optional[Any] = None,
     ) -> tuple[int, List[ModelT]]:
