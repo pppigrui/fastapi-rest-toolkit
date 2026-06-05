@@ -1,0 +1,152 @@
+.admin-menu {
+  border-right: 0;
+  padding: 8px;
+}
+
+.admin-menu .el-sub-menu__title,
+.admin-menu .el-menu-item {
+  height: 40px;
+  border-radius: var(--admin-radius);
+}
+
+.admin-menu .el-menu-item.is-active {
+  background: var(--admin-primary);
+}
+
+.menu-config-icon {
+  width: 1em;
+  margin-right: 5px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.user-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #44546a;
+  cursor: pointer;
+}
+
+.query-card,
+.table-card,
+.summary-card {
+  border-radius: var(--admin-radius);
+  border-color: var(--admin-line);
+  box-shadow: var(--admin-shadow);
+}
+
+.query-card {
+  margin-bottom: 12px;
+}
+
+.query-card .el-card__body,
+.table-card .el-card__body,
+.summary-card .el-card__body {
+  padding: 14px;
+}
+
+.query-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px 14px;
+}
+
+.query-form .el-form-item {
+  margin: 0;
+}
+
+.query-form .el-input,
+.query-form .el-select {
+  width: 220px;
+}
+
+.query-actions {
+  padding-top: 24px;
+}
+
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.pagination-bar {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.pagination-total {
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+.summary-card {
+  background:
+    linear-gradient(180deg, rgba(20, 184, 166, 0.08), transparent 54%),
+    #fff;
+}
+
+.summary-title {
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.summary-value {
+  margin-top: 6px;
+  color: var(--admin-text);
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.summary-line {
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.edit-form {
+  padding-right: 16px;
+}
+
+.full-control {
+  width: 100%;
+}
+
+.field-help {
+  width: 100%;
+  margin-top: 6px;
+  color: var(--admin-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.detail-descriptions {
+  padding-right: 16px;
+}
+
+.detail-value {
+  color: var(--admin-text);
+  word-break: break-word;
+}
+
+.el-button {
+  border-radius: var(--admin-radius);
+}
+
+.el-table {
+  --el-table-header-bg-color: var(--admin-surface-raised);
+  --el-table-row-hover-bg-color: #f1f6ff;
+}

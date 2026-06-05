@@ -56,6 +56,9 @@ dev = [
 [tool.hatch.build.targets.wheel]
 # 只把库代码打进 wheel（用户 pip install 主要装的就是 wheel）
 packages = ["src/fastapi_rest_toolkit"]
+artifacts = [
+  "src/fastapi_rest_toolkit/admin_frontend/**",
+]
 
 [tool.hatch.build.targets.sdist]
 

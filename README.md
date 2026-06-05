@@ -181,6 +181,130 @@ router.register(
 app.include_router(router.router, prefix="/api")
 ```
 
+## Admin 管理后台
+
+`AdminSite` 可以根据 SQLAlchemy model 自动生成管理接口和内置管理页面。第一版适合快速得到一个类似 Django admin 的基础 CRUD 后台。
+
+内置页面使用 Vue 3、JavaScript 和 Element Plus，前端代码放在 `src/fastapi_rest_toolkit/admin_frontend/`，`admin.py` 只负责注册路由、提供元数据和读取静态资源。
+
+前端资源按职责分层：
+
+- `assets/vendor/`：本地 Vue、Element Plus、Element Plus Icons 和 Font Awesome 静态资源，不依赖 CDN
+- `assets/js/`：API 请求、图标适配、工具函数和 Vue 入口分离
+- `assets/css/`：设计变量、基础样式、布局、组件和响应式样式分离
+
+```python
+from fastapi_rest_toolkit import AdminSite
+from app.db.session import get_session
+from app.models.user import User
+from app.models.post import Post
+
+admin = AdminSite(get_session=get_session, title="管理后台")
+
+admin.register(
+    User,
+    label="用户管理",
+    group="系统管理",
+    list_display=("id", "name", "email", "is_active", "created_at"),
+    search_fields=("name", "email"),
+    list_filter=("is_active",),
+    ordering_fields=("id", "name", "email", "created_at"),
+    readonly_fields=("id", "created_at"),
+    config_meta={
+        "icon": "fa-solid fa-user",
+        "fields": {
+            "email": {
+                "placeholder": "请输入邮箱",
+                "width": 220,
+                "rules": [
+                    {"required": True, "message": "请输入邮箱", "trigger": "blur"},
+                    {"type": "email", "message": "请输入正确的邮箱", "trigger": "blur"},
+                ],
+            },
+            "is_active": {"widget": "switch", "width": 120},
+            "created_at": {"form_hidden": True, "width": 180},
+        },
+    },
+)
+admin.register(
+    Post,
+    label="文章管理",
+    group="内容管理",
+    list_display=("id", "title", "author_id", "created_at"),
+    search_fields=("title", "content"),
+    list_filter=("author_id",),
+    ordering_fields=("id", "title", "author_id", "created_at"),
+    readonly_fields=("id", "created_at"),
+    config_meta={
+        "icon": "fa-solid fa-file-lines",
+        "fields": {
+            "author_id": {
+                "widget": "select",
+                "resource": "users",
+                "label_field": "name",
+                "placeholder": "请选择作者",
+                "rules": [
+                    {"required": True, "message": "请选择作者", "trigger": "change"},
+                ],
+            },
+            "content": {
+                "widget": "textarea",
+                "table_hidden": True,
+                "placeholder": "请输入正文内容",
+                "help_text": "长文本字段适合使用 textarea。",
+            },
+            "created_at": {"form_hidden": True, "width": 180},
+        },
+    },
+)
+
+app.include_router(admin.router, prefix="/admin")
+```
+
+`config_meta` 会原样透传到 `/admin/api/meta`，适合放后续前端展示和行为配置。当前内置页面会读取 `config_meta["icon"]` 作为菜单图标 class，也会读取 `config_meta["fields"]` 作为字段级配置。
+
+`list_filter` 用于声明列表页的精确筛选字段。布尔字段会显示为“是/否”下拉，`widget="select"` 字段会复用关联资源选项，其他字段显示为输入框。
+
+`ordering_fields` 用于声明列表页允许点击表头排序的字段；未声明时默认使用 `list_display`。
+
+字段配置第一版支持：
+
+- `hidden`：列表和表单都隐藏
+- `table_hidden`：只在列表隐藏
+- `form_hidden`：只在表单隐藏
+- `detail_hidden`：只在详情隐藏
+- `placeholder`：表单和查询输入占位符
+- `widget`：表单控件类型，支持 `input`、`textarea`、`switch`、`number`、`select`、`date`、`datetime`
+- `help_text`：表单字段下方提示
+- `width`：列表列宽
+- `rules`：Element Plus 表单校验规则
+
+如果字段没有显式配置 `rules`，内置页面会对“非空、无默认值、可编辑、非布尔”的字段自动生成必填规则。
+
+`widget="select"` 会读取同级配置：
+
+- `resource`：选项来源资源，比如 `users`
+- `label_field`：选项展示字段，比如 `name`
+- `value_field`：选项值字段，默认使用目标资源主键
+- `limit`：选项加载数量，默认 `100`
+
+启动后访问：
+
+```text
+http://127.0.0.1:8000/admin
+```
+
+自动生成的接口在 `/admin/api` 下：
+
+- `GET /admin/api/meta`：后台菜单、字段、表格列和表单元数据
+- `GET /admin/api/{resource}`：列表
+- `POST /admin/api/{resource}`：新增
+- `GET /admin/api/{resource}/{pk}`：详情
+- `PUT /admin/api/{resource}/{pk}`：修改
+- `DELETE /admin/api/{resource}/{pk}`：删除
+
+内置页面支持多选后批量删除。当前批量删除会复用单条删除接口逐条执行，完成后统一刷新列表并提示成功/失败数量。
+
 只要配置了 `model`，`ViewSet.init_schema()` 会自动生成：
 
 - `read_schema`：包含所有表字段

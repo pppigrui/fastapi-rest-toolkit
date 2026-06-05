@@ -1,4 +1,5 @@
 from .router import DefaultRouter
+from .admin import AdminSite, ModelAdmin
 from .viewset import ViewSet, LimitOffsetPagination
 from .service import CRUDService
 from .permissions import (
@@ -23,6 +24,8 @@ from .throttle import (
 
 __all__ = [
     "DefaultRouter",
+    "AdminSite",
+    "ModelAdmin",
     "ViewSet",
     "LimitOffsetPagination",
     "CRUDService",

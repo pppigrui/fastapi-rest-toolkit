@@ -1,0 +1,42 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  color: var(--admin-text);
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.05), transparent 36%),
+    linear-gradient(180deg, #f7faff, var(--admin-page-bg));
+  font-family: var(--admin-font);
+}
+
+button,
+input,
+textarea {
+  letter-spacing: 0;
+}
+
+.boot-error {
+  width: min(520px, calc(100vw - 32px));
+  margin: 20vh auto 0;
+  display: grid;
+  gap: 8px;
+  padding: 18px 20px;
+  color: #344054;
+  background: #fff;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius);
+  box-shadow: var(--admin-shadow);
+}
+
+.boot-error span {
+  color: var(--admin-muted);
+}

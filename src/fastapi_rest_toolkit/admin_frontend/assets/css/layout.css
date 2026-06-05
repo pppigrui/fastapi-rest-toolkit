@@ -1,0 +1,83 @@
+.admin-shell {
+  min-height: 100vh;
+}
+
+.admin-sidebar {
+  background:
+    linear-gradient(180deg, rgba(37, 99, 235, 0.16), transparent 160px),
+    var(--admin-sidebar-bg);
+  border-right: 1px solid var(--admin-sidebar-border);
+}
+
+.brand {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--admin-radius);
+  background: linear-gradient(135deg, var(--admin-primary), var(--admin-accent));
+  font-weight: 800;
+  box-shadow: 0 8px 18px rgba(20, 184, 166, 0.22);
+}
+
+.brand-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.menu-scroll {
+  height: calc(100vh - 56px);
+}
+
+.admin-header {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 16px;
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid var(--admin-line);
+  backdrop-filter: blur(10px);
+}
+
+.breadcrumb {
+  flex: 1;
+  min-width: 0;
+}
+
+.global-search {
+  width: 280px;
+}
+
+.admin-tabs {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  background: #fff;
+  border-bottom: 1px solid var(--admin-line);
+}
+
+.admin-main {
+  padding: 14px;
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 210px;
+  gap: 12px;
+}

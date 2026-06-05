@@ -1,0 +1,20 @@
+:root {
+  --admin-sidebar-bg: #151c28;
+  --admin-sidebar-panel: #1c2635;
+  --admin-sidebar-border: #0f1722;
+  --admin-primary: #2563eb;
+  --admin-primary-strong: #1d4ed8;
+  --admin-accent: #14b8a6;
+  --admin-danger: #dc2626;
+  --admin-line: #dfe6ef;
+  --admin-line-soft: #edf2f7;
+  --admin-surface: #ffffff;
+  --admin-surface-raised: #f8fafc;
+  --admin-page-bg: #eef3f8;
+  --admin-text: #243142;
+  --admin-muted: #68778d;
+  --admin-faint: #91a0b5;
+  --admin-shadow: 0 10px 30px rgba(15, 23, 34, 0.08);
+  --admin-radius: 4px;
+  --admin-font: "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif;
+}

@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>__ADMIN_TITLE__</title>
+  <script>window.__FASTAPI_REST_ADMIN_BASE__ = "__ADMIN_BASE_PATH__";</script>
+  <link rel="stylesheet" href="__ADMIN_BASE_PATH__/assets/vendor/element-plus/index.css">
+  <link rel="stylesheet" href="__ADMIN_BASE_PATH__/assets/vendor/fontawesome/css/all.min.css">
+  <link rel="stylesheet" href="__ADMIN_BASE_PATH__/assets/css/tokens.css">
+  <link rel="stylesheet" href="__ADMIN_BASE_PATH__/assets/css/base.css">
+  <link rel="stylesheet" href="__ADMIN_BASE_PATH__/assets/css/layout.css">
+  <link rel="stylesheet" href="__ADMIN_BASE_PATH__/assets/css/components.css">
+  <link rel="stylesheet" href="__ADMIN_BASE_PATH__/assets/css/responsive.css">
+</head>
+<body>
+  <div id="app">
+    <el-container class="admin-shell">
+      <el-aside width="224px" class="admin-sidebar">
+        <div class="brand">
+          <span class="brand-mark">A</span>
+          <span class="brand-title">{{ title }}</span>
+        </div>
+        <el-scrollbar class="menu-scroll">
+          <el-menu
+            :default-active="currentResource"
+            class="admin-menu"
+            background-color="#17212f"
+            text-color="#c8d3e2"
+            active-text-color="#ffffff"
+            @select="selectModel"
+          >
+            <el-sub-menu
+              v-for="group in meta.groups"
+              :key="group.label"
+              :index="group.label"
+            >
+              <template #title>
+                <el-icon><Folder></Folder></el-icon>
+                <span>{{ group.label }}</span>
+              </template>
+              <el-menu-item
+                v-for="model in group.models"
+                :key="model.resource"
+                :index="model.resource"
+              >
+                <i
+                  v-if="model.config_meta?.icon"
+                  :class="['menu-config-icon', model.config_meta.icon]"
+                ></i>
+                <el-icon v-else><Grid></Grid></el-icon>
+                <span>{{ model.label }}</span>
+              </el-menu-item>
+            </el-sub-menu>
+          </el-menu>
+        </el-scrollbar>
+      </el-aside>
+
+      <el-container>
+        <el-header class="admin-header">
+          <el-button :icon="Fold" circle></el-button>
+          <el-breadcrumb separator="/" class="breadcrumb">
+            <el-breadcrumb-item>首页</el-breadcrumb-item>
+            <el-breadcrumb-item v-if="currentModel">{{ currentModel.group }}</el-breadcrumb-item>
+            <el-breadcrumb-item v-if="currentModel">{{ currentModel.label }}</el-breadcrumb-item>
+          </el-breadcrumb>
+          <el-input
+            v-model="globalKeyword"
+            class="global-search"
+            placeholder="搜索或输入关键字"
+            :prefix-icon="Search"
+            clearable
+            @keyup.enter="submitQuery"
+          ></el-input>
+          <el-button :icon="Refresh" circle @click="queryRows({ notify: true, message: '刷新成功' })"></el-button>
+          <el-dropdown>
+            <span class="user-entry">
+              admin
+              <el-icon><ArrowDown></ArrowDown></el-icon>
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item>个人中心</el-dropdown-item>
+                <el-dropdown-item>退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </el-header>
+
+        <div class="admin-tabs">
+          <el-tag effect="plain" type="info">首页</el-tag>
+          <el-tag v-if="currentModel" closable>{{ currentModel.label }}</el-tag>
+        </div>
+
+        <el-main class="admin-main">
+          <div class="workspace-grid">
+            <section>
+              <el-card shadow="never" class="query-card">
+                <el-form :model="filters" inline label-position="top" class="query-form">
+                  <el-form-item
+                    v-for="field in queryFields"
+                    :key="field.name"
+                    :label="field.label"
+                  >
+                    <el-select
+                      v-if="filterWidget(field) === 'bool'"
+                      v-model="filters[field.name]"
+                      :placeholder="fieldPlaceholder(field)"
+                      clearable
+                    >
+                      <el-option label="是" value="true"></el-option>
+                      <el-option label="否" value="false"></el-option>
+                    </el-select>
+                    <el-select
+                      v-else-if="filterWidget(field) === 'select'"
+                      v-model="filters[field.name]"
+                      :placeholder="fieldPlaceholder(field)"
+                      clearable
+                      filterable
+                    >
+                      <el-option
+                        v-for="option in selectOptions(field)"
+                        :key="option.value"
+                        :label="option.label"
+                        :value="option.value"
+                      ></el-option>
+                    </el-select>
+                    <el-input
+                      v-else
+                      v-model="filters[field.name]"
+                      :placeholder="fieldPlaceholder(field)"
+                      clearable
+                      @keyup.enter="submitQuery"
+                    ></el-input>
+                  </el-form-item>
+                  <el-form-item class="query-actions">
+                    <el-button type="primary" :icon="Search" @click="submitQuery">查询</el-button>
+                    <el-button :icon="RefreshLeft" @click="resetFilters">重置</el-button>
+                  </el-form-item>
+                </el-form>
+              </el-card>
+
+              <el-card shadow="never" class="table-card">
+                <div class="table-toolbar">
+                  <el-button type="success" :icon="Plus" @click="openCreate">增加</el-button>
+                  <el-button :disabled="!selectedRow" @click="openSelectedView">查看</el-button>
+                  <el-button :icon="EditPen" :disabled="!selectedRow" @click="openSelectedEdit">修改</el-button>
+                  <el-button type="danger" :icon="Delete" :disabled="!selectedRow" @click="deleteSelected">删除</el-button>
+                  <el-button
+                    type="danger"
+                    plain
+                    :icon="Delete"
+                    :disabled="!selectedRows.length"
+                    @click="deleteSelectedRows"
+                  >批量删除<span v-if="selectedRows.length">({{ selectedRows.length }})</span></el-button>
+                  <span class="toolbar-spacer"></span>
+                  <el-button :icon="Refresh" @click="queryRows({ notify: true, message: '刷新成功' })"></el-button>
+                  <el-button :icon="Setting"></el-button>
+                </div>
+
+                <el-table
+                  v-loading="loading"
+                  :data="rows"
+                  border
+                  stripe
+                  height="calc(100vh - 366px)"
+                  empty-text="暂无数据"
+                  @sort-change="handleSortChange"
+                  @selection-change="onSelectionChange"
+                >
+                  <el-table-column type="selection" width="46" fixed></el-table-column>
+                  <el-table-column
+                    v-for="column in tableColumns"
+                    :key="column.name"
+                    :prop="column.name"
+                    :label="column.label"
+                    :width="tableColumnWidth(column)"
+                    min-width="150"
+                    :sortable="column.sortable ? 'custom' : false"
+                    show-overflow-tooltip
+                  >
+                    <template #default="{ row }">
+                      <el-switch
+                        v-if="fieldWidget(column) === 'switch'"
+                        :model-value="Boolean(row[column.name])"
+                        disabled
+                      ></el-switch>
+                      <span v-else>{{ formatTableCell(row, column) }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="动作" width="200" fixed="right">
+                    <template #default="{ row }">
+                      <el-button link @click="openView(row)">查看</el-button>
+                      <el-button link type="primary" :icon="EditPen" @click="openEdit(row)">修改</el-button>
+                      <el-button link type="danger" :icon="Delete" @click="deleteRow(row)">删除</el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+
+                <div class="pagination-bar">
+                  <span class="pagination-total">共 {{ total }} 条</span>
+                  <el-pagination
+                    v-model:current-page="pagination.page"
+                    v-model:page-size="pagination.pageSize"
+                    :total="total"
+                    :page-sizes="[10, 20, 50, 100]"
+                    layout="sizes, prev, pager, next, jumper"
+                    background
+                    @current-change="handlePageChange"
+                    @size-change="handlePageSizeChange"
+                  ></el-pagination>
+                </div>
+              </el-card>
+            </section>
+
+            <aside>
+              <el-card shadow="never" class="summary-card">
+                <div class="summary-title">当前资源</div>
+                <div class="summary-value">{{ currentModel?.label || "-" }}</div>
+                <div class="summary-line"><span>模型数</span><strong>{{ modelCount }}</strong></div>
+                <div class="summary-line"><span>字段数</span><strong>{{ fieldCount }}</strong></div>
+                <div class="summary-line"><span>总记录</span><strong>{{ total }}</strong></div>
+                <div class="summary-line"><span>当前行数</span><strong>{{ rows.length }}</strong></div>
+              </el-card>
+            </aside>
+          </div>
+        </el-main>
+      </el-container>
+    </el-container>
+
+    <el-drawer
+      v-model="drawerVisible"
+      :title="drawerTitle"
+      size="520px"
+      destroy-on-close
+    >
+      <el-descriptions
+        v-if="drawerMode === 'view'"
+        :column="1"
+        border
+        class="detail-descriptions"
+      >
+        <el-descriptions-item
+          v-for="field in detailFields"
+          :key="field.name"
+          :label="field.label"
+        >
+          <el-tag
+            v-if="field.type === 'bool'"
+            :type="detailData[field.name] ? 'success' : 'info'"
+            effect="plain"
+          >
+            {{ formatDetailCell(field) }}
+          </el-tag>
+          <span v-else class="detail-value">{{ formatDetailCell(field) }}</span>
+        </el-descriptions-item>
+      </el-descriptions>
+      <el-form
+        v-else
+        ref="editForm"
+        :model="formData"
+        :rules="formRules"
+        label-width="96px"
+        class="edit-form"
+      >
+        <el-form-item
+          v-for="field in editableFields"
+          :key="field.name"
+          :label="field.label"
+          :prop="field.name"
+        >
+          <el-switch
+            v-if="fieldWidget(field) === 'switch'"
+            v-model="formData[field.name]"
+          ></el-switch>
+          <el-input-number
+            v-else-if="fieldWidget(field) === 'number'"
+            v-model="formData[field.name]"
+            class="full-control"
+          ></el-input-number>
+          <el-select
+            v-else-if="fieldWidget(field) === 'select'"
+            v-model="formData[field.name]"
+            class="full-control"
+            :placeholder="fieldPlaceholder(field)"
+            clearable
+            filterable
+          >
+            <el-option
+              v-for="option in selectOptions(field)"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            ></el-option>
+          </el-select>
+          <el-input
+            v-else-if="fieldWidget(field) === 'textarea'"
+            v-model="formData[field.name]"
+            :maxlength="field.max_length || undefined"
+            :show-word-limit="Boolean(field.max_length)"
+            :placeholder="fieldPlaceholder(field)"
+            type="textarea"
+            :rows="4"
+          ></el-input>
+          <el-date-picker
+            v-else-if="fieldWidget(field) === 'date' || fieldWidget(field) === 'datetime'"
+            v-model="formData[field.name]"
+            class="full-control"
+            :type="datePickerType(field)"
+            :value-format="dateValueFormat(field)"
+            :placeholder="fieldPlaceholder(field)"
+            clearable
+          ></el-date-picker>
+          <el-input
+            v-else
+            v-model="formData[field.name]"
+            :maxlength="field.max_length || undefined"
+            :show-word-limit="Boolean(field.max_length)"
+            :placeholder="fieldPlaceholder(field)"
+            clearable
+          ></el-input>
+          <div v-if="fieldHelpText(field)" class="field-help">{{ fieldHelpText(field) }}</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="drawerVisible = false">取消</el-button>
+        <el-button
+          v-if="drawerMode !== 'view'"
+          type="primary"
+          :loading="saving"
+          @click="saveRow"
+        >保存</el-button>
+      </template>
+    </el-drawer>
+  </div>
+
+  <script src="__ADMIN_BASE_PATH__/assets/vendor/vue/vue.global.prod.js"></script>
+  <script src="__ADMIN_BASE_PATH__/assets/vendor/element-plus/index.full.min.js"></script>
+  <script src="__ADMIN_BASE_PATH__/assets/vendor/element-plus-icons/index.iife.min.js"></script>
+  <script src="__ADMIN_BASE_PATH__/assets/js/icons.js"></script>
+  <script src="__ADMIN_BASE_PATH__/assets/js/api.js"></script>
+  <script src="__ADMIN_BASE_PATH__/assets/js/utils.js"></script>
+  <script src="__ADMIN_BASE_PATH__/assets/js/app.js"></script>
+</body>
+</html>
