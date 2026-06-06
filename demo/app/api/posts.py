@@ -19,8 +19,19 @@ class PostViewSet(ViewSet):
     model = Post
     permission_classes = (AllowAny,)
 
-    search_fields = ("title", "content")
-    ordering_fields = ("id", "title", "created_at")
+    search_fields = ("title", "summary", "content", "category")
+    ordering_fields = (
+        "id",
+        "title",
+        "category",
+        "status",
+        "view_count",
+        "rating",
+        "priority",
+        "created_at",
+        "publish_date",
+        "published_at",
+    )
     throttle_classes = (AnonRateThrottle(),)
 
     def __init__(self):

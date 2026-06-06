@@ -23,8 +23,16 @@ class UserViewSet(ViewSet):
         IsAuthenticated,
     )
 
-    search_fields = ("email", "name")
-    ordering_fields = ("id", "email", "name", "created_at")
+    search_fields = ("email", "name", "phone", "bio")
+    ordering_fields = (
+        "id",
+        "email",
+        "name",
+        "age",
+        "account_balance",
+        "created_at",
+        "last_login_at",
+    )
     load_strategies = ("posts",)
     # join_conditions = ["posts"]
     throttle_classes = (AsyncRedisSimpleRateThrottle(redis=redis_client),)

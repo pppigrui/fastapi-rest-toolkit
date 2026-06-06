@@ -102,6 +102,10 @@ src/fastapi_rest_toolkit/admin_frontend/assets/css/
 - `ordering_fields`
 - `readonly_fields`
 - `allowed_actions`
+- `fieldsets`
+- `actions`
+- `display_methods`
+- `list_editable`
 - `config_meta`
 
 ### Field Metadata
@@ -117,6 +121,8 @@ src/fastapi_rest_toolkit/admin_frontend/assets/css/
   - readonly flag
   - default flag
   - max length
+  - choices
+  - computed flag
   - field config
 
 ### `config_meta`
@@ -137,9 +143,11 @@ Implemented field-level config:
 - `help_text`
 - `width`
 - `rules`
+- `choices`
 - `resource`
 - `label_field`
 - `value_field`
+- `search_fields`
 - `limit`
 
 Supported widgets:
@@ -149,6 +157,7 @@ Supported widgets:
 - `switch`
 - `number`
 - `select`
+- `autocomplete`
 - `date`
 - `datetime`
 
@@ -159,7 +168,13 @@ Supported widgets:
 - Exact filters from `list_filter`.
 - Boolean filter rendered as yes/no select.
 - Relation select filter rendered from another admin resource.
+- Choice filter rendered as select controls.
+- Date/datetime filters rendered as range pickers.
+- Range filters mapped to `field__gte` and `field__lte`.
 - Header sorting from `ordering_fields`.
+- Calculated display columns from `display_methods`.
+- Inline list editing for fields declared in `list_editable`.
+- Explicit save/revert controls for list edit drafts.
 - Pagination.
 - Refresh.
 - Row selection.
@@ -168,17 +183,23 @@ Supported widgets:
   - edit
   - delete
 - Batch delete selected rows.
+- Custom bulk actions.
+- Custom row actions.
 
 ### Forms
 
 - Create drawer.
 - Edit drawer.
 - Read-only detail drawer.
+- Fieldsets for create/edit/detail drawers.
 - `readonly_fields` excluded from create/edit forms.
 - `form_hidden` support.
 - `detail_hidden` support.
-- Input/textarea/switch/number/select/date/datetime widgets.
+- Input/textarea/switch/number/select/autocomplete/date/datetime widgets.
 - Relation select fields using another admin resource.
+- Remote autocomplete fields using another admin resource.
+- Choice fields and SQLAlchemy Enum fields using select widgets.
+- Choice labels rendered in table/detail tags.
 - Form validation from Element Plus `rules`.
 - Default required validation for editable non-null fields without defaults.
 
@@ -197,9 +218,14 @@ Demo examples include:
 - switch field
 - textarea field
 - relation select field
+- fieldsets
+- custom admin actions
+- declarative choices
 - list filters
 - ordering fields
 - readonly fields
+- calculated display columns
+- list editable fields
 
 ## Current Usage Example
 
@@ -279,123 +305,7 @@ app.include_router(admin.router, prefix="/admin")
 
 ## Remaining Work
 
-### 1. Fieldsets
-
-Group fields in create/edit/detail drawers.
-
-Suggested config:
-
-```python
-config_meta={
-    "fieldsets": [
-        {"label": "基础信息", "fields": ["name", "email"]},
-        {"label": "状态", "fields": ["is_active"]},
-        {"label": "时间", "fields": ["created_at"]},
-    ]
-}
-```
-
-Expected behavior:
-
-- create/edit form renders grouped sections
-- detail view renders grouped sections
-- fields not listed in fieldsets can fall back to an "其他" section
-
-### 2. Custom Actions
-
-Support Django-admin-like model actions.
-
-Initial scope:
-
-- model-level batch actions
-- row-level actions
-- Element Plus confirmation
-- success/error result display
-
-Suggested config:
-
-```python
-actions=("delete_selected", "activate_selected")
-```
-
-Later scope:
-
-- custom backend endpoints
-- action metadata in `/admin/api/meta`
-- action permissions
-
-### 3. Remote Autocomplete
-
-Current `select` loads up to 100 options. Large tables need remote search.
-
-Suggested config:
-
-```python
-"author_id": {
-    "widget": "autocomplete",
-    "resource": "users",
-    "label_field": "name",
-    "search_fields": ["name", "email"],
-}
-```
-
-Expected behavior:
-
-- remote query while typing
-- debounce
-- loading state
-- selected value display
-
-### 4. Date Range Filters
-
-Extend `list_filter` for date and datetime fields.
-
-Expected behavior:
-
-- date/datetime filter renders range picker
-- backend accepts range query parameters
-- query operators map cleanly to `sqlalchemy-crud-plus`
-
-### 5. Choices And Enums
-
-Support declarative choices.
-
-Suggested config:
-
-```python
-"status": {
-    "choices": [
-        {"label": "启用", "value": "active"},
-        {"label": "禁用", "value": "disabled"},
-    ]
-}
-```
-
-Expected behavior:
-
-- form renders select
-- table/detail can render label
-- optional tag style
-- list filter can use choices
-
-### 6. Permissions
-
-Admin UI must eventually reflect backend permissions.
-
-Needed permissions:
-
-- view
-- create
-- update
-- delete
-- action
-
-Rules:
-
-- frontend can hide unavailable controls
-- backend must still enforce permissions
-
-### 7. Inline Models
+### 1. Inline Models
 
 Manage related child resources inside parent detail/edit workflows.
 
@@ -404,20 +314,17 @@ Examples:
 - User detail displays related Posts
 - Parent edit can include child table
 
-This should be implemented after fieldsets and custom actions.
+### 2. Import And Advanced Export
 
-### 8. Import And Export
+CSV export is implemented. Remaining import/export work:
 
-Start with CSV.
-
-Later:
-
+- CSV import
 - Excel export/import
 - field selection
 - validation report
 - import preview
 
-### 9. Object History
+### 3. Object History
 
 Track admin changes.
 
@@ -428,7 +335,7 @@ Expected behavior:
 - old/new values where feasible
 - history view from detail drawer/page
 
-### 10. Dashboard
+### 4. Dashboard
 
 Admin home page should show:
 
@@ -452,4 +359,3 @@ Admin home page should show:
 - Verify with `rtk node --check` and `rtk python -m compileall`.
 - Do not use `uv run` unless explicitly requested.
 - Do not write tests unless explicitly requested.
-

@@ -7,6 +7,12 @@
     linear-gradient(180deg, rgba(37, 99, 235, 0.16), transparent 160px),
     var(--admin-sidebar-bg);
   border-right: 1px solid var(--admin-sidebar-border);
+  overflow-x: hidden;
+  transition: width 0.18s ease;
+}
+
+.admin-sidebar.is-collapsed {
+  overflow: visible;
 }
 
 .brand {
@@ -17,6 +23,15 @@
   padding: 0 18px;
   color: #fff;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.admin-sidebar.is-collapsed .brand {
+  justify-content: center;
+  padding: 0;
+}
+
+.admin-sidebar.is-collapsed .brand-title {
+  display: none;
 }
 
 .brand-mark {
@@ -70,6 +85,34 @@
   padding: 0 14px;
   background: #fff;
   border-bottom: 1px solid var(--admin-line);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.admin-tabs .el-tag {
+  flex: 0 0 auto;
+  max-width: 168px;
+  border-radius: var(--admin-radius);
+}
+
+.admin-tabs .el-tag__content {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.module-tab {
+  cursor: pointer;
+}
+
+.module-tab.is-active {
+  color: #fff;
+  background: var(--admin-primary);
+  border-color: var(--admin-primary);
+}
+
+.module-tab.is-active .el-tag__close {
+  color: #fff;
 }
 
 .admin-main {
@@ -78,6 +121,20 @@
 
 .workspace-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 210px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: 12px;
+  transition: grid-template-columns 0.18s ease;
+}
+
+.workspace-grid.is-resource-collapsed {
+  grid-template-columns: minmax(0, 1fr) 32px;
+}
+
+.resource-panel {
+  min-width: 0;
+}
+
+.resource-panel.is-collapsed {
+  display: flex;
+  justify-content: flex-end;
 }

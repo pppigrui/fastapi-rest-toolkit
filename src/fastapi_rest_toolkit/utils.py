@@ -3,9 +3,13 @@ from __future__ import annotations
 from typing import Any, Literal, Optional, Type
 from inspect import getmembers
 
-from pydantic import BaseModel, create_model
+from pydantic import BaseModel, ConfigDict, create_model
 from sqlalchemy import Column
 from sqlalchemy.orm import DeclarativeBase
+
+
+class ORMBaseModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
 
 def _optional(tp: Any) -> Any:
@@ -13,6 +17,10 @@ def _optional(tp: Any) -> Any:
 
 
 def _column_py_type(col: Column) -> Any:
+    configured = col.info.get("python_type")
+    if configured is not None:
+        return configured
+
     # Most types have python_type
     try:
         return col.type.python_type
@@ -82,8 +90,7 @@ def sqlalchemy_model_to_pydantic(
     if mode == "read":
         P = create_model(
             model_name,
-            __base__=BaseModel,
-            __config__={"from_attributes": True},
+            __base__=ORMBaseModel,
             **fields,
         )
     else:

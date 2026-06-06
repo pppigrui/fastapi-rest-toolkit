@@ -1,6 +1,9 @@
 (function () {
   function formatCell(value) {
     if (value === null || value === undefined) return "";
+    if (Array.isArray(value) || typeof value === "object") {
+      return JSON.stringify(value);
+    }
     return String(value);
   }
 
@@ -20,13 +23,29 @@
     return field.config || {};
   }
 
+  function fieldChoices(field) {
+    return Array.isArray(field.choices) ? field.choices : [];
+  }
+
+  function hasChoices(field) {
+    return fieldChoices(field).length > 0;
+  }
+
+  function choiceByValue(field, value) {
+    return fieldChoices(field).find((choice) => {
+      return choice.value === value || String(choice.value) === String(value);
+    });
+  }
+
   function fieldWidget(field) {
     const widget = fieldConfig(field).widget;
     if (widget) return widget;
+    if (hasChoices(field)) return "select";
     if (field.type === "bool") return "switch";
     if (isNumberField(field)) return "number";
     if (isDateTimeField(field)) return "datetime";
     if (isDateField(field)) return "date";
+    if (field.type === "dict" || field.type === "list") return "json";
     return "input";
   }
 
@@ -40,14 +59,27 @@
 
   function emptyFormData(fields) {
     return fields.reduce((data, field) => {
-      data[field.name] = field.type === "bool" || fieldConfig(field).widget === "switch" ? false : null;
+      const widget = fieldWidget(field);
+      if (widget === "json") {
+        data[field.name] = field.type === "list" ? "[]" : "{}";
+        return data;
+      }
+      data[field.name] = field.type === "bool" || widget === "switch" ? false : null;
       return data;
     }, {});
   }
 
   function rowToFormData(fields, row) {
     return fields.reduce((data, field) => {
-      data[field.name] = formatDateValue(row[field.name], fieldWidget(field));
+      const widget = fieldWidget(field);
+      if (widget === "json") {
+        const value = row[field.name];
+        data[field.name] = value === null || value === undefined
+          ? ""
+          : JSON.stringify(value, null, 2);
+        return data;
+      }
+      data[field.name] = formatDateValue(row[field.name], widget);
       return data;
     }, {});
   }
@@ -60,7 +92,9 @@
   }
 
   window.AdminUtils = {
+    choiceByValue,
     emptyFormData,
+    fieldChoices,
     fieldConfig,
     fieldWidget,
     formatCell,
@@ -68,6 +102,7 @@
     isDateField,
     isDateTimeField,
     isNumberField,
+    hasChoices,
     rowToFormData,
     searchableFilterState,
   };

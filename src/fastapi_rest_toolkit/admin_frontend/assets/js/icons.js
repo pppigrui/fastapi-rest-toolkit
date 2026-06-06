@@ -3,8 +3,13 @@
   const EmptyIcon = { template: "<span></span>" };
   const names = [
     "ArrowDown",
+    "ArrowLeft",
+    "ArrowRight",
+    "ArrowUp",
     "Delete",
+    "Download",
     "EditPen",
+    "Expand",
     "Fold",
     "Folder",
     "Grid",

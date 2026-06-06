@@ -194,22 +194,38 @@ app.include_router(router.router, prefix="/api")
 - `assets/css/`：设计变量、基础样式、布局、组件和响应式样式分离
 
 ```python
-from fastapi_rest_toolkit import AdminSite
+from fastapi_rest_toolkit import AdminAction, AdminSite
 from app.db.session import get_session
 from app.models.user import User
 from app.models.post import Post
 
 admin = AdminSite(get_session=get_session, title="管理后台")
 
+
+def user_status_text(*, row):
+    return "启用" if row.get("is_active") else "停用"
+
 admin.register(
     User,
     label="用户管理",
     group="系统管理",
-    list_display=("id", "name", "email", "is_active", "created_at"),
+    list_display=("id", "name", "email", "is_active", "status_text", "created_at"),
+    list_editable=("is_active",),
     search_fields=("name", "email"),
     list_filter=("is_active",),
     ordering_fields=("id", "name", "email", "created_at"),
     readonly_fields=("id", "created_at"),
+    fieldsets=(
+        ("基础信息", {"fields": ("name", "email")}),
+        ("状态", {"fields": ("is_active",), "description": "控制用户是否可用。"}),
+    ),
+    display_methods={
+        "status_text": {
+            "label": "状态文本",
+            "handler": user_status_text,
+            "width": 100,
+        },
+    },
     config_meta={
         "icon": "fa-solid fa-user",
         "fields": {
@@ -235,6 +251,10 @@ admin.register(
     list_filter=("author_id",),
     ordering_fields=("id", "title", "author_id", "created_at"),
     readonly_fields=("id", "created_at"),
+    fieldsets=(
+        ("文章信息", {"fields": ("title", "author_id")}),
+        ("正文", {"fields": ("content",), "description": "长文本字段使用独立分组。"}),
+    ),
     config_meta={
         "icon": "fa-solid fa-file-lines",
         "fields": {
@@ -263,9 +283,66 @@ app.include_router(admin.router, prefix="/admin")
 
 `config_meta` 会原样透传到 `/admin/api/meta`，适合放后续前端展示和行为配置。当前内置页面会读取 `config_meta["icon"]` 作为菜单图标 class，也会读取 `config_meta["fields"]` 作为字段级配置。
 
-`list_filter` 用于声明列表页的精确筛选字段。布尔字段会显示为“是/否”下拉，`widget="select"` 字段会复用关联资源选项，其他字段显示为输入框。
+`fieldsets` 用于声明创建、编辑和详情抽屉的字段分组。支持 Django 风格的 `("标题", {"fields": (...)})`，也支持 `{"title": "标题", "fields": (...)}`。
 
-`ordering_fields` 用于声明列表页允许点击表头排序的字段；未声明时默认使用 `list_display`。
+自定义动作使用 `AdminAction` 声明，可用于批量动作或行级动作：
+
+```python
+from sqlalchemy import update
+
+async def activate_users(*, session, pks):
+    await session.execute(
+        update(User).where(User.id.in_(pks)).values(is_active=True)
+    )
+    return {"message": f"已启用 {len(pks)} 个用户"}
+
+admin.register(
+    User,
+    actions=(
+        AdminAction(
+            name="activate",
+            label="批量启用",
+            handler=activate_users,
+            scope="bulk",
+            confirmation="确认启用选中的用户？",
+            variant="success",
+        ),
+    ),
+)
+```
+
+`list_filter` 用于声明列表页筛选字段。布尔字段会显示为“是/否”下拉，日期/时间字段会显示范围选择器，`widget="select"` 或 `widget="autocomplete"` 字段会复用关联资源选项，其他字段显示为输入框。
+
+`ordering_fields` 用于声明列表页允许点击表头排序的字段；未声明时默认使用 `list_display` 里的真实模型字段，计算列不会参与排序。
+
+`display_methods` 用于声明列表/详情里的只读计算列，适合展示状态文本、统计值或由多字段组合出的摘要。handler 必须是同步函数，可以接收 `obj`、`row` 或 `model_admin` 参数：
+
+```python
+def user_status_text(*, row):
+    return "启用" if row.get("is_active") else "停用"
+
+admin.register(
+    User,
+    list_display=("id", "name", "is_active", "status_text"),
+    display_methods={
+        "status_text": {
+            "label": "状态文本",
+            "handler": user_status_text,
+            "width": 100,
+        },
+    },
+)
+```
+
+`list_editable` 用于声明列表页可直接编辑的真实模型字段。字段必须同时出现在 `list_display` 中，不能是主键、只读字段、隐藏字段或 `display_methods` 计算列。前端会在表格里记录本页草稿，点击“保存本页修改”后统一提交变更字段：
+
+```python
+admin.register(
+    User,
+    list_display=("id", "name", "email", "is_active"),
+    list_editable=("is_active",),
+)
+```
 
 字段配置第一版支持：
 
@@ -274,19 +351,47 @@ app.include_router(admin.router, prefix="/admin")
 - `form_hidden`：只在表单隐藏
 - `detail_hidden`：只在详情隐藏
 - `placeholder`：表单和查询输入占位符
-- `widget`：表单控件类型，支持 `input`、`textarea`、`switch`、`number`、`select`、`date`、`datetime`
+- `widget`：表单控件类型，支持 `input`、`textarea`、`switch`、`number`、`select`、`autocomplete`、`date`、`datetime`
 - `help_text`：表单字段下方提示
 - `width`：列表列宽
 - `rules`：Element Plus 表单校验规则
+- `choices`：声明式选项，支持表单下拉、列表筛选和表格/详情标签渲染
 
 如果字段没有显式配置 `rules`，内置页面会对“非空、无默认值、可编辑、非布尔”的字段自动生成必填规则。
 
-`widget="select"` 会读取同级配置：
+`choices` 示例：
+
+```python
+"status": {
+    "choices": [
+        {"label": "启用", "value": "active", "type": "success"},
+        {"label": "禁用", "value": "disabled", "type": "info"},
+    ]
+}
+```
+
+未显式声明 `widget` 时，带有 `choices` 的字段会自动使用 `select`。SQLAlchemy Enum 字段会自动生成 choices。
+
+关联字段的 `widget="select"` 和 `widget="autocomplete"` 会读取同级配置：
 
 - `resource`：选项来源资源，比如 `users`
 - `label_field`：选项展示字段，比如 `name`
 - `value_field`：选项值字段，默认使用目标资源主键
 - `limit`：选项加载数量，默认 `100`
+
+`widget="autocomplete"` 会在输入时通过目标资源列表接口远程搜索，适合用户、作者、分类等数据量较大的关联字段：
+
+```python
+"author_id": {
+    "widget": "autocomplete",
+    "resource": "users",
+    "label_field": "name",
+    "search_fields": ("name", "email"),
+    "placeholder": "请选择作者",
+}
+```
+
+日期/时间字段加入 `list_filter` 后，前端会提交 `{field}__gte` 和 `{field}__lte` 参数，后端只允许已声明的筛选字段使用范围操作。
 
 启动后访问：
 

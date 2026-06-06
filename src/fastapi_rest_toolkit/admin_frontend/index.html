@@ -16,7 +16,10 @@
 <body>
   <div id="app">
     <el-container class="admin-shell">
-      <el-aside width="224px" class="admin-sidebar">
+      <el-aside
+        :width="sidebarWidth"
+        :class="['admin-sidebar', { 'is-collapsed': isSidebarCollapsed }]"
+      >
         <div class="brand">
           <span class="brand-mark">A</span>
           <span class="brand-title">{{ title }}</span>
@@ -28,6 +31,8 @@
             background-color="#17212f"
             text-color="#c8d3e2"
             active-text-color="#ffffff"
+            :collapse="isSidebarCollapsed"
+            :collapse-transition="false"
             @select="selectModel"
           >
             <el-sub-menu
@@ -58,7 +63,13 @@
 
       <el-container>
         <el-header class="admin-header">
-          <el-button :icon="Fold" circle></el-button>
+          <el-button
+            :icon="isSidebarCollapsed ? Expand : Fold"
+            :title="isSidebarCollapsed ? '展开侧栏' : '收起侧栏'"
+            :aria-label="isSidebarCollapsed ? '展开侧栏' : '收起侧栏'"
+            circle
+            @click="toggleSidebar"
+          ></el-button>
           <el-breadcrumb separator="/" class="breadcrumb">
             <el-breadcrumb-item>首页</el-breadcrumb-item>
             <el-breadcrumb-item v-if="currentModel">{{ currentModel.group }}</el-breadcrumb-item>
@@ -88,28 +99,71 @@
         </el-header>
 
         <div class="admin-tabs">
-          <el-tag effect="plain" type="info">首页</el-tag>
-          <el-tag v-if="currentModel" closable>{{ currentModel.label }}</el-tag>
+          <el-tag class="home-tab" effect="plain" type="info">首页</el-tag>
+          <el-tag
+            v-for="tab in openedResourceTabs"
+            :key="tab.resource"
+            :class="['module-tab', { 'is-active': tab.resource === currentResource }]"
+            :closable="openedResources.length > 1"
+            effect="plain"
+            @click="switchResourceTab(tab.resource)"
+            @close="(event) => closeResourceTab(tab.resource, event)"
+          >{{ tab.label }}</el-tag>
         </div>
 
         <el-main class="admin-main">
-          <div class="workspace-grid">
+          <div
+            :class="[
+              'workspace-grid',
+              { 'is-resource-collapsed': isResourcePanelCollapsed },
+            ]"
+          >
             <section>
               <el-card shadow="never" class="query-card">
                 <el-form :model="filters" inline label-position="top" class="query-form">
                   <el-form-item
-                    v-for="field in queryFields"
+                    v-for="field in visibleQueryFields"
                     :key="field.name"
                     :label="field.label"
+                    class="query-field-item"
                   >
+                    <el-date-picker
+                      v-if="filterWidget(field) === 'date_range' || filterWidget(field) === 'datetime_range'"
+                      v-model="filters[field.name]"
+                      class="query-range"
+                      :type="rangePickerType(field)"
+                      :value-format="rangeValueFormat(field)"
+                      start-placeholder="开始"
+                      end-placeholder="结束"
+                      range-separator="至"
+                      clearable
+                    ></el-date-picker>
                     <el-select
-                      v-if="filterWidget(field) === 'bool'"
+                      v-else-if="filterWidget(field) === 'bool'"
                       v-model="filters[field.name]"
                       :placeholder="fieldPlaceholder(field)"
                       clearable
                     >
                       <el-option label="是" value="true"></el-option>
                       <el-option label="否" value="false"></el-option>
+                    </el-select>
+                    <el-select
+                      v-else-if="filterWidget(field) === 'autocomplete'"
+                      v-model="filters[field.name]"
+                      :placeholder="fieldPlaceholder(field)"
+                      clearable
+                      filterable
+                      remote
+                      reserve-keyword
+                      :remote-method="(query) => searchRemoteOptions(field, query)"
+                      :loading="isOptionLoading(field)"
+                    >
+                      <el-option
+                        v-for="option in selectOptions(field)"
+                        :key="option.value"
+                        :label="option.label"
+                        :value="option.value"
+                      ></el-option>
                     </el-select>
                     <el-select
                       v-else-if="filterWidget(field) === 'select'"
@@ -133,9 +187,18 @@
                       @keyup.enter="submitQuery"
                     ></el-input>
                   </el-form-item>
-                  <el-form-item class="query-actions">
+                  <el-form-item class="query-actions query-action-item">
                     <el-button type="primary" :icon="Search" @click="submitQuery">查询</el-button>
                     <el-button :icon="RefreshLeft" @click="resetFilters">重置</el-button>
+                    <el-button
+                      v-if="queryFields.length > visibleQueryFields.length || isQueryExpanded"
+                      :icon="isQueryExpanded ? ArrowUp : ArrowDown"
+                      class="query-toggle"
+                      @click="toggleQueryFields"
+                    >
+                      <span v-if="isQueryExpanded">收起筛选</span>
+                      <span v-else>展开筛选({{ hiddenQueryFieldCount }})</span>
+                    </el-button>
                   </el-form-item>
                 </el-form>
               </el-card>
@@ -143,17 +206,52 @@
               <el-card shadow="never" class="table-card">
                 <div class="table-toolbar">
                   <el-button type="success" :icon="Plus" @click="openCreate">增加</el-button>
-                  <el-button :disabled="!selectedRow" @click="openSelectedView">查看</el-button>
                   <el-button :icon="EditPen" :disabled="!selectedRow" @click="openSelectedEdit">修改</el-button>
-                  <el-button type="danger" :icon="Delete" :disabled="!selectedRow" @click="deleteSelected">删除</el-button>
                   <el-button
                     type="danger"
-                    plain
                     :icon="Delete"
                     :disabled="!selectedRows.length"
-                    @click="deleteSelectedRows"
-                  >批量删除<span v-if="selectedRows.length">({{ selectedRows.length }})</span></el-button>
+                    @click="deleteSelected"
+                  >删除<span v-if="selectedRows.length > 1">({{ selectedRows.length }})</span></el-button>
+                  <el-dropdown
+                    v-if="bulkActions.length"
+                    :disabled="!selectedRows.length"
+                    @command="runBulkAction"
+                  >
+                    <el-button :disabled="!selectedRows.length">
+                      批量动作
+                      <el-icon class="el-icon--right"><ArrowDown></ArrowDown></el-icon>
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item
+                          v-for="action in bulkActions"
+                          :key="action.name"
+                          :command="action.name"
+                        >{{ action.label }}</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                  <el-button
+                    v-if="listEditableColumns.length"
+                    type="primary"
+                    plain
+                    :disabled="!listEditDirtyCount"
+                    :loading="listEditSaving"
+                    @click="saveListEdits"
+                  >保存本页修改<span v-if="listEditDirtyCount">({{ listEditDirtyCount }})</span></el-button>
+                  <el-button
+                    v-if="listEditableColumns.length"
+                    :disabled="!listEditDirtyCount || listEditSaving"
+                    @click="resetListEdits"
+                  >撤销修改</el-button>
                   <span class="toolbar-spacer"></span>
+                  <el-button
+                    v-if="canExportRows"
+                    :icon="Download"
+                    :loading="exporting"
+                    @click="exportRows"
+                  >导出 CSV</el-button>
                   <el-button :icon="Refresh" @click="queryRows({ notify: true, message: '刷新成功' })"></el-button>
                   <el-button :icon="Setting"></el-button>
                 </div>
@@ -163,7 +261,7 @@
                   :data="rows"
                   border
                   stripe
-                  height="calc(100vh - 366px)"
+                  height="calc(100vh - 408px)"
                   empty-text="暂无数据"
                   @sort-change="handleSortChange"
                   @selection-change="onSelectionChange"
@@ -180,19 +278,111 @@
                     show-overflow-tooltip
                   >
                     <template #default="{ row }">
-                      <el-switch
-                        v-if="fieldWidget(column) === 'switch'"
-                        :model-value="Boolean(row[column.name])"
-                        disabled
-                      ></el-switch>
-                      <span v-else>{{ formatTableCell(row, column) }}</span>
+                      <div
+                        v-if="isListEditableColumn(column)"
+                        :class="['list-edit-cell', { 'is-dirty': isListCellDirty(row, column) }]"
+                      >
+                        <el-switch
+                          v-if="fieldWidget(column) === 'switch'"
+                          :model-value="Boolean(listEditValue(row, column))"
+                          @change="(value) => setListEditValue(row, column, value)"
+                        ></el-switch>
+                        <el-input-number
+                          v-else-if="fieldWidget(column) === 'number'"
+                          :model-value="listEditValue(row, column)"
+                          size="small"
+                          controls-position="right"
+                          class="list-edit-control"
+                          @update:model-value="(value) => setListEditValue(row, column, value)"
+                        ></el-input-number>
+                        <el-select
+                          v-else-if="fieldWidget(column) === 'autocomplete'"
+                          :model-value="listEditValue(row, column)"
+                          size="small"
+                          class="list-edit-control"
+                          :placeholder="fieldPlaceholder(column)"
+                          clearable
+                          filterable
+                          remote
+                          reserve-keyword
+                          :remote-method="(query) => searchRemoteOptions(column, query)"
+                          :loading="isOptionLoading(column)"
+                          @change="(value) => setListEditValue(row, column, value)"
+                        >
+                          <el-option
+                            v-for="option in selectOptions(column)"
+                            :key="option.value"
+                            :label="option.label"
+                            :value="option.value"
+                          ></el-option>
+                        </el-select>
+                        <el-select
+                          v-else-if="fieldWidget(column) === 'select'"
+                          :model-value="listEditValue(row, column)"
+                          size="small"
+                          class="list-edit-control"
+                          :placeholder="fieldPlaceholder(column)"
+                          clearable
+                          filterable
+                          @change="(value) => setListEditValue(row, column, value)"
+                        >
+                          <el-option
+                            v-for="option in selectOptions(column)"
+                            :key="option.value"
+                            :label="option.label"
+                            :value="option.value"
+                          ></el-option>
+                        </el-select>
+                        <el-date-picker
+                          v-else-if="fieldWidget(column) === 'date' || fieldWidget(column) === 'datetime'"
+                          :model-value="listEditValue(row, column)"
+                          size="small"
+                          class="list-edit-control"
+                          :type="datePickerType(column)"
+                          :value-format="dateValueFormat(column)"
+                          :placeholder="fieldPlaceholder(column)"
+                          clearable
+                          @update:model-value="(value) => setListEditValue(row, column, value)"
+                        ></el-date-picker>
+                        <el-input
+                          v-else
+                          :model-value="listEditValue(row, column)"
+                          size="small"
+                          class="list-edit-control"
+                          :maxlength="column.max_length || undefined"
+                          :placeholder="fieldPlaceholder(column)"
+                          clearable
+                          @input="(value) => setListEditValue(row, column, value)"
+                        ></el-input>
+                      </div>
+                      <template v-else>
+                        <el-switch
+                          v-if="fieldWidget(column) === 'switch'"
+                          :model-value="Boolean(row[column.name])"
+                          disabled
+                        ></el-switch>
+                        <el-tag
+                          v-else-if="hasChoices(column)"
+                          :type="choiceTagType(row[column.name], column)"
+                          effect="plain"
+                          size="small"
+                        >{{ formatTableCell(row, column) }}</el-tag>
+                        <span v-else>{{ formatTableCell(row, column) }}</span>
+                      </template>
                     </template>
                   </el-table-column>
-                  <el-table-column label="动作" width="200" fixed="right">
+                  <el-table-column label="动作" width="260" fixed="right">
                     <template #default="{ row }">
                       <el-button link @click="openView(row)">查看</el-button>
                       <el-button link type="primary" :icon="EditPen" @click="openEdit(row)">修改</el-button>
                       <el-button link type="danger" :icon="Delete" @click="deleteRow(row)">删除</el-button>
+                      <el-button
+                        v-for="action in rowActions"
+                        :key="action.name"
+                        link
+                        :type="actionType(action)"
+                        @click="runRowAction(action, row)"
+                      >{{ action.label }}</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -213,14 +403,90 @@
               </el-card>
             </section>
 
-            <aside>
-              <el-card shadow="never" class="summary-card">
-                <div class="summary-title">当前资源</div>
+            <aside
+              :class="[
+                'resource-panel',
+                { 'is-collapsed': isResourcePanelCollapsed },
+              ]"
+            >
+              <el-button
+                v-if="isResourcePanelCollapsed"
+                :icon="ArrowLeft"
+                title="展开当前资源"
+                aria-label="展开当前资源"
+                circle
+                @click="toggleResourcePanel"
+              ></el-button>
+              <el-card v-else shadow="never" class="summary-card">
+                <div class="summary-header">
+                  <div class="summary-title">当前资源</div>
+                  <el-button
+                    :icon="ArrowRight"
+                    title="收起当前资源"
+                    aria-label="收起当前资源"
+                    circle
+                    size="small"
+                    @click="toggleResourcePanel"
+                  ></el-button>
+                </div>
                 <div class="summary-value">{{ currentModel?.label || "-" }}</div>
                 <div class="summary-line"><span>模型数</span><strong>{{ modelCount }}</strong></div>
                 <div class="summary-line"><span>字段数</span><strong>{{ fieldCount }}</strong></div>
                 <div class="summary-line"><span>总记录</span><strong>{{ total }}</strong></div>
                 <div class="summary-line"><span>当前行数</span><strong>{{ rows.length }}</strong></div>
+                <div class="summary-section-title">资源信息</div>
+                <div class="summary-table-wrap">
+                  <el-table
+                    :data="resourceInfoRows"
+                    :fit="false"
+                    border
+                    size="small"
+                    class="summary-table"
+                    empty-text="暂无资源信息"
+                  >
+                    <el-table-column prop="label" label="项目" width="92"></el-table-column>
+                    <el-table-column label="内容" width="238" show-overflow-tooltip>
+                      <template #default="{ row }">
+                        <span class="resource-info-value">{{ row.value }}</span>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                </div>
+                <div class="summary-section-title">字段配置</div>
+                <div class="summary-table-wrap">
+                  <el-table
+                    :data="currentFields"
+                    :fit="false"
+                    border
+                    stripe
+                    size="small"
+                    max-height="280"
+                    class="summary-table summary-field-table"
+                    empty-text="暂无字段"
+                  >
+                    <el-table-column prop="name" label="字段" width="120" show-overflow-tooltip></el-table-column>
+                    <el-table-column prop="label" label="名称" width="120" show-overflow-tooltip></el-table-column>
+                    <el-table-column prop="type" label="类型" width="92" show-overflow-tooltip></el-table-column>
+                    <el-table-column label="组件" width="96">
+                      <template #default="{ row }">
+                        {{ fieldWidget(row) }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="属性" width="190">
+                      <template #default="{ row }">
+                        <el-tag
+                          v-for="badge in fieldBadges(row)"
+                          :key="badge.label"
+                          :type="badge.type"
+                          effect="plain"
+                          size="small"
+                          class="field-badge"
+                        >{{ badge.label }}</el-tag>
+                        <span v-if="!fieldBadges(row).length" class="field-empty">-</span>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                </div>
               </el-card>
             </aside>
           </div>
@@ -234,27 +500,45 @@
       size="520px"
       destroy-on-close
     >
-      <el-descriptions
-        v-if="drawerMode === 'view'"
-        :column="1"
-        border
-        class="detail-descriptions"
-      >
-        <el-descriptions-item
-          v-for="field in detailFields"
-          :key="field.name"
-          :label="field.label"
+      <div v-if="drawerMode === 'view'" class="field-section-list detail-section-list">
+        <section
+          v-for="section in detailFieldSections"
+          :key="section.title || section.fields[0]?.name"
+          class="field-section"
         >
-          <el-tag
-            v-if="field.type === 'bool'"
-            :type="detailData[field.name] ? 'success' : 'info'"
-            effect="plain"
+          <div v-if="section.title || section.description" class="field-section-header">
+            <div>
+              <div v-if="section.title" class="field-section-title">{{ section.title }}</div>
+              <div v-if="section.description" class="field-section-description">{{ section.description }}</div>
+            </div>
+          </div>
+          <el-descriptions
+            :column="1"
+            border
+            class="detail-descriptions"
           >
-            {{ formatDetailCell(field) }}
-          </el-tag>
-          <span v-else class="detail-value">{{ formatDetailCell(field) }}</span>
-        </el-descriptions-item>
-      </el-descriptions>
+            <el-descriptions-item
+              v-for="field in section.fields"
+              :key="field.name"
+              :label="field.label"
+            >
+              <el-tag
+                v-if="field.type === 'bool'"
+                :type="detailData[field.name] ? 'success' : 'info'"
+                effect="plain"
+              >
+                {{ formatDetailCell(field) }}
+              </el-tag>
+              <el-tag
+                v-else-if="hasChoices(field)"
+                :type="choiceTagType(detailData[field.name], field)"
+                effect="plain"
+              >{{ formatDetailCell(field) }}</el-tag>
+              <span v-else class="detail-value">{{ formatDetailCell(field) }}</span>
+            </el-descriptions-item>
+          </el-descriptions>
+        </section>
+      </div>
       <el-form
         v-else
         ref="editForm"
@@ -263,64 +547,102 @@
         label-width="96px"
         class="edit-form"
       >
-        <el-form-item
-          v-for="field in editableFields"
-          :key="field.name"
-          :label="field.label"
-          :prop="field.name"
+        <section
+          v-for="section in editableFieldSections"
+          :key="section.title || section.fields[0]?.name"
+          class="field-section"
         >
-          <el-switch
-            v-if="fieldWidget(field) === 'switch'"
-            v-model="formData[field.name]"
-          ></el-switch>
-          <el-input-number
-            v-else-if="fieldWidget(field) === 'number'"
-            v-model="formData[field.name]"
-            class="full-control"
-          ></el-input-number>
-          <el-select
-            v-else-if="fieldWidget(field) === 'select'"
-            v-model="formData[field.name]"
-            class="full-control"
-            :placeholder="fieldPlaceholder(field)"
-            clearable
-            filterable
+          <div v-if="section.title || section.description" class="field-section-header">
+            <div>
+              <div v-if="section.title" class="field-section-title">{{ section.title }}</div>
+              <div v-if="section.description" class="field-section-description">{{ section.description }}</div>
+            </div>
+          </div>
+          <el-form-item
+            v-for="field in section.fields"
+            :key="field.name"
+            :label="field.label"
+            :prop="field.name"
           >
-            <el-option
-              v-for="option in selectOptions(field)"
-              :key="option.value"
-              :label="option.label"
-              :value="option.value"
-            ></el-option>
-          </el-select>
-          <el-input
-            v-else-if="fieldWidget(field) === 'textarea'"
-            v-model="formData[field.name]"
-            :maxlength="field.max_length || undefined"
-            :show-word-limit="Boolean(field.max_length)"
-            :placeholder="fieldPlaceholder(field)"
-            type="textarea"
-            :rows="4"
-          ></el-input>
-          <el-date-picker
-            v-else-if="fieldWidget(field) === 'date' || fieldWidget(field) === 'datetime'"
-            v-model="formData[field.name]"
-            class="full-control"
-            :type="datePickerType(field)"
-            :value-format="dateValueFormat(field)"
-            :placeholder="fieldPlaceholder(field)"
-            clearable
-          ></el-date-picker>
-          <el-input
-            v-else
-            v-model="formData[field.name]"
-            :maxlength="field.max_length || undefined"
-            :show-word-limit="Boolean(field.max_length)"
-            :placeholder="fieldPlaceholder(field)"
-            clearable
-          ></el-input>
-          <div v-if="fieldHelpText(field)" class="field-help">{{ fieldHelpText(field) }}</div>
-        </el-form-item>
+            <el-switch
+              v-if="fieldWidget(field) === 'switch'"
+              v-model="formData[field.name]"
+            ></el-switch>
+            <el-input-number
+              v-else-if="fieldWidget(field) === 'number'"
+              v-model="formData[field.name]"
+              class="full-control"
+            ></el-input-number>
+            <el-select
+              v-else-if="fieldWidget(field) === 'autocomplete'"
+              v-model="formData[field.name]"
+              class="full-control"
+              :placeholder="fieldPlaceholder(field)"
+              clearable
+              filterable
+              remote
+              reserve-keyword
+              :remote-method="(query) => searchRemoteOptions(field, query)"
+              :loading="isOptionLoading(field)"
+            >
+              <el-option
+                v-for="option in selectOptions(field)"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              ></el-option>
+            </el-select>
+            <el-select
+              v-else-if="fieldWidget(field) === 'select'"
+              v-model="formData[field.name]"
+              class="full-control"
+              :placeholder="fieldPlaceholder(field)"
+              clearable
+              filterable
+            >
+              <el-option
+                v-for="option in selectOptions(field)"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              ></el-option>
+            </el-select>
+            <el-input
+              v-else-if="fieldWidget(field) === 'json'"
+              v-model="formData[field.name]"
+              :placeholder="fieldPlaceholder(field)"
+              type="textarea"
+              :rows="6"
+            ></el-input>
+            <el-input
+              v-else-if="fieldWidget(field) === 'textarea'"
+              v-model="formData[field.name]"
+              :maxlength="field.max_length || undefined"
+              :show-word-limit="Boolean(field.max_length)"
+              :placeholder="fieldPlaceholder(field)"
+              type="textarea"
+              :rows="4"
+            ></el-input>
+            <el-date-picker
+              v-else-if="fieldWidget(field) === 'date' || fieldWidget(field) === 'datetime'"
+              v-model="formData[field.name]"
+              class="full-control"
+              :type="datePickerType(field)"
+              :value-format="dateValueFormat(field)"
+              :placeholder="fieldPlaceholder(field)"
+              clearable
+            ></el-date-picker>
+            <el-input
+              v-else
+              v-model="formData[field.name]"
+              :maxlength="field.max_length || undefined"
+              :show-word-limit="Boolean(field.max_length)"
+              :placeholder="fieldPlaceholder(field)"
+              clearable
+            ></el-input>
+            <div v-if="fieldHelpText(field)" class="field-help">{{ fieldHelpText(field) }}</div>
+          </el-form-item>
+        </section>
       </el-form>
       <template #footer>
         <el-button @click="drawerVisible = false">取消</el-button>
