@@ -193,8 +193,12 @@ app.include_router(router.router, prefix="/api")
 - `assets/js/`：API 请求、图标适配、工具函数和 Vue 入口分离
 - `assets/css/`：设计变量、基础样式、布局、组件和响应式样式分离
 
+### 快速接入
+
+在应用启动文件中创建 `AdminSite`，注册 SQLAlchemy 模型，然后把 `admin.router` 挂到 FastAPI：
+
 ```python
-from fastapi_rest_toolkit import AdminAction, AdminSite
+from fastapi_rest_toolkit import AdminSite
 from app.db.session import get_session
 from app.models.user import User
 from app.models.post import Post
@@ -259,9 +263,10 @@ admin.register(
         "icon": "fa-solid fa-file-lines",
         "fields": {
             "author_id": {
-                "widget": "select",
+                "widget": "autocomplete",
                 "resource": "users",
                 "label_field": "name",
+                "search_fields": ("name", "email"),
                 "placeholder": "请选择作者",
                 "rules": [
                     {"required": True, "message": "请选择作者", "trigger": "change"},
@@ -281,39 +286,225 @@ admin.register(
 app.include_router(admin.router, prefix="/admin")
 ```
 
-`config_meta` 会原样透传到 `/admin/api/meta`，适合放后续前端展示和行为配置。当前内置页面会读取 `config_meta["icon"]` 作为菜单图标 class，也会读取 `config_meta["fields"]` 作为字段级配置。
+本地源码运行时建议使用项目依赖环境，例如 `uv run demo/main.py`。代码里应使用正式包名 `fastapi_rest_toolkit` 导入，不建议写 `src.fastapi_rest_toolkit`，否则静态资源包 `fastapi_rest_toolkit.admin_frontend` 可能无法按正常包名加载。
 
-`fieldsets` 用于声明创建、编辑和详情抽屉的字段分组。支持 Django 风格的 `("标题", {"fields": (...)})`，也支持 `{"title": "标题", "fields": (...)}`。
+启动后访问：
 
-自定义动作使用 `AdminAction` 声明，可用于批量动作或行级动作：
+```text
+http://127.0.0.1:8000/admin
+```
+
+自动生成的接口在 `/admin/api` 下：
+
+- `GET /admin/api/meta`：后台菜单、字段、表格列和表单元数据
+- `GET /admin/api/{resource}`：列表
+- `POST /admin/api/{resource}`：新增
+- `GET /admin/api/{resource}/{pk}`：详情
+- `PUT /admin/api/{resource}/{pk}`：修改
+- `DELETE /admin/api/{resource}/{pk}`：删除
+- `GET /admin/api/{resource}/export.csv`：按当前筛选和排序导出 CSV
+- `POST /admin/api/{resource}/actions/{action}`：批量自定义动作
+- `POST /admin/api/{resource}/{pk}/actions/{action}`：行级自定义动作
+
+### `admin.register()` 参数
+
+`admin.register()` 是内置管理后台的核心配置入口。它负责把一个 SQLAlchemy model 注册成一个后台资源，并生成元数据、CRUD 接口和页面菜单。
+
+| 参数 | 含义 |
+| --- | --- |
+| `model` | 必填。要注册的 SQLAlchemy model。 |
+| `label` | 菜单、标题、抽屉里显示的名称；不传时使用模型类名。 |
+| `group` | 左侧菜单分组；默认是 `管理`。 |
+| `resource` | API 和前端资源名；不传时使用 `model.__tablename__`。例如 `users`。 |
+| `list_display` | 列表表格展示字段。可包含真实模型字段和 `display_methods` 计算列。 |
+| `search_fields` | 顶部搜索框参与模糊搜索的字段。 |
+| `list_filter` | 查询区筛选字段。布尔字段显示是/否下拉，日期/时间字段显示范围选择器，选择类字段显示下拉。 |
+| `ordering_fields` | 允许点击表头排序的真实模型字段；不传时默认使用 `list_display` 中的真实模型字段。 |
+| `readonly_fields` | 只读字段。创建/编辑表单不会提交这些字段，常用于 `id`、`created_at`。 |
+| `allowed_actions` | 开启哪些基础动作，默认 `list/retrieve/create/update/destroy`。可用于做只读后台。 |
+| `fieldsets` | 创建、编辑、详情抽屉里的字段分组，风格接近 Django admin。 |
+| `actions` | 自定义批量动作或行级动作。 |
+| `display_methods` | 列表和详情里的只读计算字段。 |
+| `list_editable` | 允许在列表中直接编辑的真实模型字段。 |
+| `config_meta` | 透传到 `/admin/api/meta` 的前端配置；当前主要读取 `icon` 和 `fields`。 |
+| `permission_classes` | 该资源专用权限类；不传时使用 `AdminSite` 默认权限。 |
+| `authentication_classes` | 该资源专用认证类；不传时使用 `AdminSite` 默认认证。 |
+
+### 字段标签
+
+字段显示名优先读取 SQLAlchemy column 的 `info["name"]`：
 
 ```python
-from sqlalchemy import update
+email = mapped_column(String(100), info={"name": "邮箱"})
+```
 
-async def activate_users(*, session, pks):
-    await session.execute(
-        update(User).where(User.id.in_(pks)).values(is_active=True)
-    )
-    return {"message": f"已启用 {len(pks)} 个用户"}
+如果没有配置 `info["name"]`，后台会使用 Python 字段名，例如 `email`。
 
-admin.register(
-    User,
-    actions=(
-        AdminAction(
-            name="activate",
-            label="批量启用",
-            handler=activate_users,
-            scope="bulk",
-            confirmation="确认启用选中的用户？",
-            variant="success",
-        ),
-    ),
+如果字段是 JSON 列但需要特殊 Python 类型，可以在 `info["python_type"]` 中声明。例如 JSON 数组字段：
+
+```python
+tools = mapped_column(JSON, info={"name": "工具列表", "python_type": list})
+```
+
+### `fieldsets`
+
+`fieldsets` 用于声明创建、编辑和详情抽屉的字段分组。支持 Django 风格，也支持 dict 风格：
+
+```python
+fieldsets=(
+    ("基础信息", {"fields": ("name", "email")}),
+    ("状态", {"fields": ("is_active",), "description": "控制用户是否可用。"}),
 )
 ```
 
-`list_filter` 用于声明列表页筛选字段。布尔字段会显示为“是/否”下拉，日期/时间字段会显示范围选择器，`widget="select"` 或 `widget="autocomplete"` 字段会复用关联资源选项，其他字段显示为输入框。
+可用配置：
 
-`ordering_fields` 用于声明列表页允许点击表头排序的字段；未声明时默认使用 `list_display` 里的真实模型字段，计算列不会参与排序。
+- `fields`：该分组包含的字段名。
+- `description`：分组说明文字。
+- `collapsible`：是否可折叠，元数据已支持。
+- `default_collapsed`：默认是否折叠，元数据已支持。
+
+未出现在 `fieldsets` 里的可见字段，会落入前端的“其他”分组。
+
+### 字段级配置
+
+字段级配置放在 `config_meta["fields"]` 下，key 必须是模型字段名或计算列名：
+
+```python
+config_meta={
+    "icon": "fa-solid fa-user",
+    "fields": {
+        "email": {
+            "placeholder": "请输入邮箱",
+            "width": 220,
+            "rules": [
+                {"required": True, "message": "请输入邮箱", "trigger": "blur"},
+                {"type": "email", "message": "请输入正确的邮箱", "trigger": "blur"},
+            ],
+        },
+        "is_active": {"widget": "switch", "width": 120},
+        "created_at": {"form_hidden": True, "width": 180},
+    },
+}
+```
+
+| 配置项 | 含义 |
+| --- | --- |
+| `hidden` | 表格、表单、详情全部隐藏。 |
+| `table_hidden` | 只在列表表格隐藏。 |
+| `form_hidden` | 只在创建/编辑表单隐藏。 |
+| `detail_hidden` | 只在详情视图隐藏。 |
+| `placeholder` | 表单输入框和查询输入框的占位提示。 |
+| `widget` | 控件类型，见下方控件表。 |
+| `help_text` | 表单字段下方的辅助说明。 |
+| `width` | 表格列宽，传给 Element Plus `el-table-column`。 |
+| `rules` | Element Plus 表单校验规则。 |
+| `choices` | 声明式选项，用于下拉、筛选和标签渲染。 |
+| `resource` | 关联选择字段的目标资源名，例如 `users`。 |
+| `label_field` | 关联选项显示字段，例如 `name`。 |
+| `value_field` | 关联选项值字段；不传时使用目标资源主键。 |
+| `search_fields` | `autocomplete` 远程搜索时目标资源参与搜索的字段。 |
+| `limit` | 关联选项加载数量，默认 `100`。 |
+
+如果字段没有显式配置 `rules`，内置页面会对“非空、无默认值、可编辑、非布尔”的字段自动生成必填规则。
+
+### 控件类型
+
+| `widget` | 适用场景 |
+| --- | --- |
+| `input` | 普通文本输入。 |
+| `textarea` | 长文本字段，例如正文、描述、提示词。 |
+| `switch` | 布尔字段。未配置时 bool 字段自动使用它。 |
+| `number` | 整数或浮点数字段。未配置时 int/float 字段自动使用它。 |
+| `select` | 固定选项、枚举字段、普通关联下拉。 |
+| `autocomplete` | 远程搜索关联资源，适合数据量较大的作者、用户等字段。 |
+| `date` | 日期字段。 |
+| `datetime` | 日期时间字段。 |
+| `json` | JSON 对象或数组，表单中以 textarea 编辑，保存前会解析为 JSON。 |
+
+未显式声明 `widget` 时，前端会按字段类型自动选择：`choices` 使用 `select`，bool 使用 `switch`，数字使用 `number`，date/datetime 使用日期控件，dict/list 使用 `json`。
+
+`json` 字段示例：
+
+```python
+admin.register(
+    Agent,
+    list_display=("id", "code", "name", "model", "created_at"),
+    readonly_fields=("id", "created_at"),
+    fieldsets=(
+        ("基础信息", {"fields": ("code", "name", "description", "model")}),
+        ("提示词", {"fields": ("prompt",)}),
+        ("能力配置", {"fields": ("setting", "tools", "parameters")}),
+    ),
+    config_meta={
+        "icon": "fa-solid fa-robot",
+        "fields": {
+            "prompt": {"widget": "textarea", "table_hidden": True},
+            "setting": {"widget": "json", "table_hidden": True},
+            "tools": {"widget": "json", "table_hidden": True},
+            "parameters": {"widget": "json", "table_hidden": True},
+        },
+    },
+)
+```
+
+### 选项和枚举
+
+`choices` 支持普通 list，也支持带标签样式的 dict：
+
+```python
+"status": {
+    "choices": [
+        {"label": "启用", "value": "active", "type": "success"},
+        {"label": "禁用", "value": "disabled", "type": "info"},
+    ]
+}
+```
+
+未显式声明 `widget` 时，带有 `choices` 的字段会自动使用 `select`。SQLAlchemy Enum 字段会自动生成 choices；如果需要中文标签或标签颜色，建议显式配置 `choices`。
+
+### 关联选择
+
+关联字段的 `widget="select"` 和 `widget="autocomplete"` 会读取同级配置：
+
+- `resource`：选项来源资源，比如 `users`
+- `label_field`：选项展示字段，比如 `name`
+- `value_field`：选项值字段，默认使用目标资源主键
+- `search_fields`：远程搜索时使用的目标资源字段
+- `limit`：选项加载数量，默认 `100`
+
+`widget="autocomplete"` 会在输入时通过目标资源列表接口远程搜索：
+
+```python
+"author_id": {
+    "widget": "autocomplete",
+    "resource": "users",
+    "label_field": "name",
+    "search_fields": ("name", "email"),
+    "placeholder": "请选择作者",
+}
+```
+
+### 查询、排序和导出
+
+- `search_fields`：顶部搜索框会向列表接口提交 `search` 参数。
+- `list_filter`：查询区筛选字段。日期/时间字段会提交 `{field}__gte` 和 `{field}__lte`。
+- `ordering_fields`：控制哪些表头允许排序。
+- CSV 导出复用当前筛选和排序，默认最多导出 `10000` 条，可通过 `export_limit` 调小。
+
+### 列表编辑
+
+`list_editable` 用于声明列表页可直接编辑的真实模型字段。字段必须同时出现在 `list_display` 中，不能是主键、只读字段、隐藏字段或 `display_methods` 计算列。前端会在表格里记录本页草稿，点击“保存本页修改”后统一提交变更字段：
+
+```python
+admin.register(
+    User,
+    list_display=("id", "name", "email", "is_active"),
+    list_editable=("is_active",),
+)
+```
+
+### 计算列
 
 `display_methods` 用于声明列表/详情里的只读计算列，适合展示状态文本、统计值或由多字段组合出的摘要。handler 必须是同步函数，可以接收 `obj`、`row` 或 `model_admin` 参数：
 
@@ -334,81 +525,62 @@ admin.register(
 )
 ```
 
-`list_editable` 用于声明列表页可直接编辑的真实模型字段。字段必须同时出现在 `list_display` 中，不能是主键、只读字段、隐藏字段或 `display_methods` 计算列。前端会在表格里记录本页草稿，点击“保存本页修改”后统一提交变更字段：
+### 自定义动作
+
+自定义动作使用 `AdminAction` 声明，可用于批量动作或行级动作：
+
+```python
+from sqlalchemy import update
+
+async def activate_users(*, session, pks):
+    await session.execute(
+        update(User).where(User.id.in_(pks)).values(is_active=True)
+    )
+    return {"message": f"已启用 {len(pks)} 个用户"}
+
+async def deactivate_user(*, session, pk):
+    await session.execute(update(User).where(User.id == pk).values(is_active=False))
+    return {"message": "已停用用户"}
+
+admin.register(
+    User,
+    actions=(
+        AdminAction(
+            name="activate",
+            label="批量启用",
+            handler=activate_users,
+            scope="bulk",
+            confirmation="确认启用选中的用户？",
+            variant="success",
+        ),
+        AdminAction(
+            name="deactivate",
+            label="停用",
+            handler=deactivate_user,
+            scope="row",
+            confirmation="确认停用这个用户？",
+            variant="warning",
+        ),
+    ),
+)
+```
+
+`scope` 可选 `bulk`、`row`、`both`。批量动作 handler 通常接收 `session` 和 `pks`；行级动作 handler 通常接收 `session` 和 `pk`。`variant` 会映射到 Element Plus 按钮类型。
+
+### Admin 权限和动作开关
+
+可以通过 `allowed_actions` 控制某个 admin 资源启用哪些基础动作：
 
 ```python
 admin.register(
     User,
-    list_display=("id", "name", "email", "is_active"),
-    list_editable=("is_active",),
+    allowed_actions=("list", "retrieve"),
 )
 ```
 
-字段配置第一版支持：
+也可以通过 `permission_classes` 和 `authentication_classes` 为某个资源覆盖默认认证和权限。
 
-- `hidden`：列表和表单都隐藏
-- `table_hidden`：只在列表隐藏
-- `form_hidden`：只在表单隐藏
-- `detail_hidden`：只在详情隐藏
-- `placeholder`：表单和查询输入占位符
-- `widget`：表单控件类型，支持 `input`、`textarea`、`switch`、`number`、`select`、`autocomplete`、`date`、`datetime`
-- `help_text`：表单字段下方提示
-- `width`：列表列宽
-- `rules`：Element Plus 表单校验规则
-- `choices`：声明式选项，支持表单下拉、列表筛选和表格/详情标签渲染
-
-如果字段没有显式配置 `rules`，内置页面会对“非空、无默认值、可编辑、非布尔”的字段自动生成必填规则。
-
-`choices` 示例：
-
-```python
-"status": {
-    "choices": [
-        {"label": "启用", "value": "active", "type": "success"},
-        {"label": "禁用", "value": "disabled", "type": "info"},
-    ]
-}
-```
-
-未显式声明 `widget` 时，带有 `choices` 的字段会自动使用 `select`。SQLAlchemy Enum 字段会自动生成 choices。
-
-关联字段的 `widget="select"` 和 `widget="autocomplete"` 会读取同级配置：
-
-- `resource`：选项来源资源，比如 `users`
-- `label_field`：选项展示字段，比如 `name`
-- `value_field`：选项值字段，默认使用目标资源主键
-- `limit`：选项加载数量，默认 `100`
-
-`widget="autocomplete"` 会在输入时通过目标资源列表接口远程搜索，适合用户、作者、分类等数据量较大的关联字段：
-
-```python
-"author_id": {
-    "widget": "autocomplete",
-    "resource": "users",
-    "label_field": "name",
-    "search_fields": ("name", "email"),
-    "placeholder": "请选择作者",
-}
-```
-
-日期/时间字段加入 `list_filter` 后，前端会提交 `{field}__gte` 和 `{field}__lte` 参数，后端只允许已声明的筛选字段使用范围操作。
-
-启动后访问：
-
-```text
-http://127.0.0.1:8000/admin
-```
-
-自动生成的接口在 `/admin/api` 下：
-
-- `GET /admin/api/meta`：后台菜单、字段、表格列和表单元数据
-- `GET /admin/api/{resource}`：列表
-- `POST /admin/api/{resource}`：新增
-- `GET /admin/api/{resource}/{pk}`：详情
-- `PUT /admin/api/{resource}/{pk}`：修改
-- `DELETE /admin/api/{resource}/{pk}`：删除
-
-内置页面支持多选后批量删除。当前批量删除会复用单条删除接口逐条执行，完成后统一刷新列表并提示成功/失败数量。
+## Schema 自动生成
 
 只要配置了 `model`，`ViewSet.init_schema()` 会自动生成：
 
