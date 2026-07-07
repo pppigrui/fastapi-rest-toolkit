@@ -22,6 +22,8 @@ from .throttle import (
     AsyncRedisSimpleRateThrottle,
 )
 
+version = "0.2.2"
+
 __all__ = [
     "DefaultRouter",
     "AdminAction",
@@ -43,4 +45,5 @@ __all__ = [
     "SimpleRateThrottle",
     "AnonRateThrottle",
     "AsyncRedisSimpleRateThrottle",
+    "version",
 ]
