@@ -25,7 +25,7 @@ from .permissions import BasePermission
 from .request import FRFRequest
 from .router import DefaultRouter
 from .service import CRUDService
-from .utils import sqlalchemy_model_to_pydantic
+from .utils import is_auto_generated_primary_key, sqlalchemy_model_to_pydantic
 from .viewset import ViewSet
 
 
@@ -195,7 +195,8 @@ class ModelAdmin:
                     "type": py_type,
                     "primary_key": col.primary_key,
                     "nullable": col.nullable,
-                    "readonly": col.key in readonly or col.primary_key,
+                    "readonly": col.key in readonly
+                    or is_auto_generated_primary_key(col),
                     "default": col.default is not None
                     or col.server_default is not None,
                     "max_length": getattr(col.type, "length", None),

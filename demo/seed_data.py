@@ -14,15 +14,22 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.models.agent import Agent  # noqa: F401
 from app.models.base import Base
 from app.models.post import Post, PostStatus
+from app.models.tag import Tag
 from app.models.user import User, UserRole
 
 
 DEFAULT_USER_COUNT = 1000
 DEFAULT_POST_COUNT = 10000
 DEFAULT_BATCH_SIZE = 1000
-DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "app.db"
+DEFAULT_DB_PATH = Path(__file__).resolve().parent / "app.db"
 
 POST_CATEGORIES = ("tech", "product", "ops", "notice")
+TAGS = (
+    {"name": "FastAPI", "color": "#409eff"},
+    {"name": "SQLAlchemy", "color": "#67c23a"},
+    {"name": "Admin", "color": "#e6a23c"},
+    {"name": "Demo", "color": "#909399"},
+)
 
 
 def chunked(items: list[dict], size: int) -> Iterable[list[dict]]:
@@ -96,6 +103,15 @@ async def insert_batches(session, model, rows: list[dict], batch_size: int) -> N
         await session.execute(insert(model), batch)
 
 
+async def seed_tags(session, batch_size: int) -> int:
+    result = await session.execute(select(Tag.name))
+    existing = set(result.scalars())
+    rows = [tag for tag in TAGS if tag["name"] not in existing]
+    if rows:
+        await insert_batches(session, Tag, rows, batch_size)
+    return len(rows)
+
+
 async def seed_data(args: argparse.Namespace) -> None:
     db_url = args.database_url or f"sqlite+aiosqlite:///{args.db_path}"
     engine = create_async_engine(db_url, echo=False)
@@ -111,6 +127,9 @@ async def seed_data(args: argparse.Namespace) -> None:
         await conn.run_sync(Base.metadata.create_all)
 
     async with session_factory() as session:
+        tag_count = await seed_tags(session, args.batch_size)
+        await session.commit()
+
         users = build_users(fake, args.users, run_id)
         await insert_batches(session, User, users, args.batch_size)
         await session.commit()
@@ -130,7 +149,7 @@ async def seed_data(args: argparse.Namespace) -> None:
 
     await engine.dispose()
     print(
-        f"Seeded {len(users)} users and {len(posts)} posts into {db_url} "
+        f"Seeded {tag_count} tags, {len(users)} users and {len(posts)} posts into {db_url} "
         f"(run_id={run_id})."
     )
 
@@ -149,7 +168,7 @@ def parse_args() -> argparse.Namespace:
         "--db-path",
         type=Path,
         default=DEFAULT_DB_PATH,
-        help="SQLite 数据库路径；默认使用项目根目录 app.db。",
+        help="SQLite 数据库路径；默认使用 demo/app.db。",
     )
     parser.add_argument(
         "--database-url",

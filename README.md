@@ -976,3 +976,5 @@ uv lock --locked
 ## License
 
 MIT License
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/pppigrui/fastapi-rest-toolkit)

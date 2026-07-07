@@ -6,13 +6,14 @@ from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends
-from sqlalchemy import update
+from sqlalchemy import insert, select, update
 
 from app.db.session import engine, get_session
 from app.models.base import Base
 from app.models.user import User
 from app.models.post import Post
 from app.models.agent import Agent
+from app.models.tag import PostTag, Tag
 
 from app.auth.jwt import encode_jwt
 
@@ -23,11 +24,28 @@ from app.exceptions import register_exception_handlers
 from app.api.posts import PostViewSet
 
 
+DEMO_TAGS = (
+    {"name": "FastAPI", "color": "#409eff"},
+    {"name": "SQLAlchemy", "color": "#67c23a"},
+    {"name": "Admin", "color": "#e6a23c"},
+    {"name": "Demo", "color": "#909399"},
+)
+
+
+async def ensure_demo_tags(conn) -> None:
+    result = await conn.execute(select(Tag.name))
+    existing = set(result.scalars())
+    rows = [tag for tag in DEMO_TAGS if tag["name"] not in existing]
+    if rows:
+        await conn.execute(insert(Tag), rows)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):  # noqa: ARG001
     # Startup
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await ensure_demo_tags(conn)
     yield
     # Shutdown (if needed)
 
@@ -300,6 +318,64 @@ admin.register(
             "created_at": {
                 "form_hidden": True,
                 "width": 180,
+            },
+        },
+    },
+)
+admin.register(
+    Tag,
+    label="标签管理",
+    group="Demo",
+    list_display=("id", "name", "color"),
+    list_editable=("name", "color"),
+    search_fields=("name", "color"),
+    ordering_fields=("id", "name"),
+    readonly_fields=("id",),
+    config_meta={
+        "icon": "fa-solid fa-tags",
+        "fields": {
+            "name": {
+                "placeholder": "请输入标签名",
+                "width": 160,
+                "rules": [
+                    {"required": True, "message": "请输入标签名", "trigger": "blur"},
+                ],
+            },
+            "color": {
+                "placeholder": "例如 #409eff",
+                "width": 130,
+            },
+        },
+    },
+)
+admin.register(
+    PostTag,
+    label="文章标签关联",
+    group="Demo",
+    list_display=("post_id", "tag_id"),
+    allowed_actions=("list", "create"),
+    config_meta={
+        "icon": "fa-solid fa-link",
+        "fields": {
+            "post_id": {
+                "widget": "select",
+                "resource": "posts",
+                "label_field": "title",
+                "placeholder": "请选择文章",
+                "width": 220,
+                "rules": [
+                    {"required": True, "message": "请选择文章", "trigger": "change"},
+                ],
+            },
+            "tag_id": {
+                "widget": "select",
+                "resource": "tags",
+                "label_field": "name",
+                "placeholder": "请选择标签",
+                "width": 160,
+                "rules": [
+                    {"required": True, "message": "请选择标签", "trigger": "change"},
+                ],
             },
         },
     },

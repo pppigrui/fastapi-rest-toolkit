@@ -29,6 +29,16 @@ def _column_py_type(col: Column) -> Any:
         return Any
 
 
+def is_auto_generated_primary_key(col: Column) -> bool:
+    if not col.primary_key:
+        return False
+    if len(col.table.primary_key.columns) != 1:
+        return False
+    if col.foreign_keys:
+        return False
+    return getattr(col, "autoincrement", False) is not False
+
+
 def sqlalchemy_model_to_pydantic(
     sa_model: Type[DeclarativeBase],
     *,
@@ -59,7 +69,7 @@ def sqlalchemy_model_to_pydantic(
 
         # create mode: typically don't need id / server_default fields
         if mode == "create":
-            if col.primary_key and getattr(col, "autoincrement", False):
+            if is_auto_generated_primary_key(col):
                 continue
             if col.server_default is not None:
                 continue

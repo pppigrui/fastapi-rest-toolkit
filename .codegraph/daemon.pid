@@ -1,6 +1,6 @@
 {
-  "pid": 5784,
-  "version": "0.9.6",
+  "pid": 77416,
+  "version": "0.9.9",
   "socketPath": "/Users/xiaorui/Desktop/fastapi_rest_toolkit/.codegraph/daemon.sock",
-  "startedAt": 1780644894045
+  "startedAt": 1783395229818
 }
